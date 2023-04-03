@@ -1,46 +1,84 @@
 module Day15 (day15) where
 
-import MyLib 
-import Text.Megaparsec (parseMaybe)
-import Text.Megaparsec.Char (space, char, string)
-import Data.Maybe (fromJust)
-import Debug.Trace
-import Data.List
+import MyLib
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import Data.Maybe
+import Data.List (nub, sort)
 
-data Disk = D { cyc :: Int, offset :: Int } deriving (Show, Eq, Ord)
+type Index = (Int, Int)
+type Range = (Int, Int)
+type Sensor = Vec (S (S Z)) Range
+type Sensor' = (Index, Index)
 
-diskParser :: Parser Disk
-diskParser = do
-  d <- string "Disc #" >> signedInteger
-  c <- string " has " >> signedInteger
-  o <- string " positions; at time=0, it is at position " >> signedInteger <* char '.' <* space
-  return $ D c (negate (o + d) `mod` c)
+manhattan' :: Index -> Index -> Int
+manhattan' (a, b) (c, d) = abs (a - c) + abs (b - d)
 
-disk0 :: Disk
-disk0 = D 1 0
+withinRange :: Index -> Sensor -> Bool
+withinRange (x, y) (Cons (a, b) (Cons (c, d) Nil)) =
+     x + y >= a
+  && x + y < b
+  && x - y >= c
+  && x - y < d
+  
+sensorParser :: Parser Sensor
+sensorParser = do
+  string "Sensor at x="
+  x <- signedInteger
+  string ", y="
+  y <- signedInteger
+  string ": closest beacon is at x="
+  x' <- signedInteger
+  string ", y="
+  y' <- signedInteger
+  let a = (x, y)
+      r = abs (x - x') + abs (y - y')
+  pure $ Cons (x + y - r, x + y + r + 1) $ Cons (x - y - r, x - y + r + 1) Nil
+  --          x + y + a ~ x + y + b     x - y + a ~ x - y + b
 
-combineDisk :: Disk -> Disk -> Disk
-combineDisk (D c1 o1) (D c2 o2) = D (lcm c1 c2) ((o2 - (c2 * y * m)) `mod` c3)
+atY :: Int -> Sensor -> Maybe (Int, Int)
+atY y s@(Cons (a, b) (Cons (c, d) Nil))
+  | withinRange (x1, y) s = Just (x1, x2)
+  | withinRange (x3, y) s = Just (x3, x4)
+  | otherwise = Nothing
   where
-    (n, x, y) = emcd c1 c2
-    c3 = lcm c1 c2
-    m = (o2 - o1) `div` n
+    x1 = c + y
+    x2 = b - y
+    x3 = a - y
+    x4 = d + y
+    
+sensorParser' :: Parser Sensor'
+sensorParser' = do
+  string "Sensor at x="
+  x <- signedInteger
+  string ", y="
+  y <- signedInteger
+  string ": closest beacon is at x="
+  x' <- signedInteger
+  string ", y="
+  y' <- signedInteger
+  pure ((x, y), (x', y'))
 
+fuseRange :: Ord a => [(a, a)] -> [(a, a)]
+fuseRange [] = []
+fuseRange [x] = [x]
+fuseRange (x : y : xs) = if snd x >= fst y then fuseRange ((fst x, max (snd x) (snd y)) : xs) else x : fuseRange (y : xs)
 
--- c1 a + o1 = c2 b + o2 = t
--- c1 a = c2 b + o2 - o1 = t - o1
--- c1 a - c2 b = o2 - o1 = (t - o1) - c2 b
--- c1 x + c2 y = n
--- m = (o2 - o1) `div` n
--- c1 (x * m) + c2 (y * m) = m * n = o2 - o1 = (t - o1) - c2 b
--- --------------------------------- o2 - o1 = (t - o1) + c2 * (y * m)
--- t = o2 - o1 - (c2 * y * m) + o1 = o1 - c2 * y * m
-
+contains :: Sensor -> Sensor -> Bool
+contains s1 s2 = Just s2 == overlapEucVec s1 s2
 
 day15 :: IO ()
 day15 = do
-  -- disks <- map (fromJust . parseMaybe diskParser) . lines <$> readFile "test15.txt"
-  disks <- map (fromJust . parseMaybe diskParser) . lines <$> readFile "input15.txt"
-  let disks' = disks ++ [D 11 (negate 7 `mod` 11)]
-  putStrLn $ ("day15a: " ++) $ show $ offset $ foldl' combineDisk disk0 disks
-  putStrLn $ ("day15b: " ++) $ show $ offset $ foldl' combineDisk disk0 disks'
+  -- sensors <- map (fromJust . parseMaybe sensorParser) . lines <$> readFile "test15.txt"
+  -- sensors' <- map (fromJust . parseMaybe sensorParser') . lines <$> readFile "test15.txt"
+  sensors <- map (fromJust . parseMaybe sensorParser) . lines <$> readFile "input15.txt"
+  sensors' <- map (fromJust . parseMaybe sensorParser') . lines <$> readFile "input15.txt"
+  let xs = concatMap (\(a, b) -> [fst a - manhattan' a b, fst a + manhattan' a b]) sensors'
+      minX = minimum xs
+      maxX= maximum xs
+      y = 2000000
+      y' = 10
+      beaconsAtY n = nub $ filter ((== n) . snd) $ map snd sensors'
+      searchArea
+  putStrLn $ ("day15a: " ++) $ show $ subtract (length (beaconsAtY y)) $ sum $ map (uncurry subtract) $ fuseRange $ sort $ mapMaybe (atY y) sensors
+  putStrLn $ ("day15b: " ++) $ show $ subtractEucVecs sensors []

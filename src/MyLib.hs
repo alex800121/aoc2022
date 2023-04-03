@@ -11,16 +11,19 @@ import qualified Data.Sequence as S
 import Data.Char (ord, intToDigit, digitToInt)
 import Data.Bits (xor)
 import Data.List.Split (chunksOf)
-import Data.Foldable (toList)
+import Data.Foldable (toList, Foldable (foldr'))
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.List (delete, tails, group, nub)
+import Data.List (delete, tails, group, nub, foldl')
 import Data.Maybe (fromMaybe, maybeToList)
 import Debug.Trace
 import Control.Monad (guard, mplus)
 
 (+&):: (Num a, Num b) => (a, b) -> (a, b) -> (a, b)
 (a, b) +& (c, d) = (a + c, b + d)
+
+(-&):: (Num a, Num b) => (a, b) -> (a, b) -> (a, b)
+(a, b) -& (c, d) = (a - c, b - d)
 
 data Tree a = Leaf a | Branch a [Tree a] deriving (Show, Eq, Ord)
 
@@ -251,17 +254,6 @@ overlapEucVec (Cons (a, b) xs) (Cons (c, d) ys)
     maxOfSmall = max a c
     minOfBig = max b d
 
-a = Cons (1, 5) Nil
-a' = Cons (2, 4) Nil
-b = Cons (3, 7) Nil
-c = Cons (1, 5) $ Cons (2, 6) Nil
-d = Cons (3, 7) $ Cons (4, 8) Nil
-e = Cons (2, 4) $ Cons (3, 5) Nil
-f = Cons (1, 5) $ Cons (2, 6) $ Cons (3, 7) Nil
-g = Cons (2, 4) $ Cons (3, 5) $ Cons (4, 6) Nil
-h = Cons (1, 5) $ Cons (2, 6) $ Cons (3, 7) $ Cons (4, 8) Nil
-i = Cons (2, 4) $ Cons (3, 5) $ Cons (4, 6) $ Cons (5, 7) Nil
-
 subtractEucVec :: Ord a => Vec n (a, a) -> Vec n (a, a) -> [Vec n (a, a)]
 subtractEucVec Nil Nil = [Nil]
 subtractEucVec (Cons (a, b) xs) (Cons (c, d) ys) =
@@ -272,6 +264,22 @@ subtractEucVec' Nil Nil = []
 subtractEucVec' (Cons (a, b) xs) (Cons (c, d) ys) =
      [ Cons (x, y) ys | (x, y) <- [(c, a), (b, d)], y > x ]
   ++ [ Cons (x', y') rest | (x', y') <- [(max a c, min b d)], y' > x', rest <- subtractEucVec' xs ys ]
+
+subtractEucVecs' :: Ord a => Vec n (a, a) -> [Vec n (a, a)] -> [Vec n (a, a)]
+subtractEucVecs' x = concatMap (subtractEucVec x)
+
+
+subtractEucVecs :: Ord a => [Vec n (a, a)] -> [Vec n (a, a)] -> [Vec n (a, a)]
+subtractEucVecs xs ys = foldr' subtractEucVecs' ys xs
+
+jointEucVec :: Ord a => Vec n (a, a) -> Vec n (a, a) -> [Vec n (a, a)]
+jointEucVec x y = x : subtractEucVec x y
+
+jointEucVecs' :: Ord a => [Vec n (a, a)] -> Vec n (a, a) -> [Vec n (a, a)]
+jointEucVecs' xs y = y : concatMap (subtractEucVec y) xs
+
+jointEucVecs :: Ord a => [Vec n (a, a)] -> [Vec n (a, a)]
+jointEucVecs = foldl' jointEucVecs' []
 
 fromVec :: Vec n a -> [a]
 fromVec Nil = []

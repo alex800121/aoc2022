@@ -1,43 +1,45 @@
 module Day14 (day14) where
 
 import MyLib
-import Crypto.Hash.MD5
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as BS
-import Data.String
-import Data.ByteString.Base16
+import Data.List.Split
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.Bifunctor
 import Data.List
-import Data.Maybe
+import Data.Maybe (fromJust)
+import Debug.Trace
 
-input :: ByteString
-input = fromString "cuanljph"
+type Index = (Int, Int)
+type Cave = Set Index
 
-test :: ByteString
-test = fromString "abc"
+origin :: Index
+origin = (500, 0)
 
-hashListN :: Int -> ByteString -> Int -> ByteString
-hashListN n s = (!! n) . iterate (encode . hash) . (s <>) . fromString . show
+buildCave :: [Index] -> Set Index
+buildCave [] = Set.empty
+buildCave [x] = Set.singleton x
+buildCave (x : y : xs) = let a = bimap signum signum $ y -& x in Set.union (Set.fromList $ takeWhile (/= y) $ iterate (+& a) x) $ buildCave (y : xs)
 
-hashList :: Int -> ByteString -> [ByteString]
-hashList n s = map (hashListN n s) [0..]
+dropSand :: Int -> Cave -> Index -> Index
+dropSand bottom c (x, y)
+  | y >= bottom = (x, y)
+  | (x, y + 1) `Set.notMember` c = dropSand bottom c (x, y + 1)
+  | (x - 1, y + 1) `Set.notMember` c = dropSand bottom c (x - 1, y + 1)
+  | (x + 1, y + 1) `Set.notMember` c = dropSand bottom c (x + 1, y + 1)
+  | otherwise = (x, y)
 
-calcKey :: Int -> Int -> ByteString -> (Maybe Char, [Char], ByteString)
-calcKey n1 n2 x = (listToMaybe $ hasNConsecutives n1 x, hasNConsecutives n2 x, x)
-
-isKey :: Int -> [(Maybe Char, [Char], ByteString)] -> Bool
-isKey _ ((Nothing, _, _) : _) = False
-isKey n ((Just x, _, _) : xs) = any (elem x . snd') $ take 1000 xs
-
-fst' :: (a, b, c) -> a
-fst' (a, _, _) = a
-
-snd' :: (a, b, c) -> b
-snd' (_, b, _) = b
-
-hasNConsecutives :: Int -> ByteString -> [Char]
-hasNConsecutives n s = map BS.head $ filter ((>= n) . BS.length) $ BS.group s
-
+settleSand :: Int -> Index -> (Index, Cave) -> (Index, Cave)
+-- settleSand bottom x (_, c) = trace (show y) (y, Set.insert y c)
+settleSand bottom x (_, c) = (y, Set.insert (dropSand bottom c x) c)
+  where
+    y = dropSand bottom c x 
+    
 day14 :: IO ()
 day14 = do
-  putStrLn $ ("day14a: " ++) $ show $ (!! 63) $ findIndices (isKey 1000) $ tails $ map (calcKey 3 5) $ hashList 1 input
-  putStrLn $ ("day14b: " ++) $ show $ (!! 63) $ findIndices (isKey 1000) $ tails $ map (calcKey 3 5) $ hashList 2017 input
+  cave <- Set.unions . map (buildCave . map ((\(x : y : _) -> (read x, read y)) . splitOn ",") . splitOn " -> ") . lines <$> readFile "input14.txt"
+  -- cave <- Set.unions . map (buildCave . map ((\(x : y : _) -> (read x, read y)) . splitOn ",") . splitOn " -> ") . lines <$> readFile "test14.txt"
+  let bottom = maximum $ Set.map snd cave
+  putStrLn $ ("day14a: " ++) $ show $ subtract 1 $ fromJust $ findIndex ((>= bottom) . snd . fst) $ iterate (settleSand bottom origin) (origin, cave)
+  -- print cave
+  -- print bottom
+  putStrLn $ ("day14b: " ++) $ show $ (+ 1) $ fromJust $ findIndex ((== origin) . fst) $ tail $ iterate (settleSand (bottom + 1) origin) (origin, cave)
