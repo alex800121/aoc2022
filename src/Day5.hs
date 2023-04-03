@@ -2,49 +2,35 @@
 module Day5 (day5) where
 
 import MyLib
--- import Data.Digest.Pure.MD5
-import Data.ByteString.Base16
-import Crypto.Hash.MD5
--- import Data.ByteString (ByteString)
--- import qualified Data.ByteString as ByteString
-import Data.String (fromString)
-import Data.List (delete)
-import Data.Char (digitToInt)
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as ByteString
-import Debug.Trace
+import Data.List.Split
+import Data.List
+import Data.Char
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IM
 
-input :: ByteString
-input = "cxdnnyjw"
--- input = "abc"
+type Instruction = (Int, Int, Int)
+type Crates = IntMap String
 
-inputList :: [ByteString]
-inputList = map ((input <>) . fromString . show)  [0..]
+buildCrates :: String -> Crates
+buildCrates s = IM.fromList $ map (\(x : xs) -> (digitToInt x, filter isAlpha xs)) $ filter (isDigit . head) $ transpose $ reverse $ lines s
 
-hashList :: [ByteString]
-hashList = map (encode . hash) inputList
+buildIns :: String -> [Instruction]
+buildIns = map ((\(_ : x : _ : y : _ : z : _) -> (read x, read y, read z)) . words) . lines
 
-has5Zero :: [ByteString]
-has5Zero = filter ("00000" `ByteString.isPrefixOf`) hashList
-
-take8NonZero :: ByteString
-take8NonZero = ByteString.pack $ map (`ByteString.index` 5) $ take 8 has5Zero
-
-buildPW :: ByteString -> String -> [ByteString] -> ByteString
-buildPW temp seen (x : xs)
-  -- | trace (ByteString.unpack $ temp <> (',' `ByteString.cons` fromString seen)) False = undefined
-  | null seen =  temp
-  | pos `notElem` seen = buildPW temp seen xs
-  | otherwise = buildPW temp' seen' xs
+readInsFunc :: (String -> String) -> Crates -> Instruction -> Crates
+readInsFunc f c (n, from, to) = IM.insert from fromCrate' $ IM.insert to toCrate' c
   where
-    pos = x `ByteString.index` 5
-    pos' = digitToInt pos
-    seen' = delete pos seen
-    temp' = ByteString.take pos' temp <> ((x `ByteString.index` 6) `ByteString.cons` ByteString.drop (pos' + 1) temp)
-
+    fromCrate = c IM.! from
+    toCrate = c IM.! to
+    (fromCrate', taken) = splitAt (length fromCrate - n) fromCrate
+    toCrate' = toCrate <> f taken
+    
+readInsStack = readInsFunc reverse
+readInsQueue = readInsFunc id
 day5 :: IO ()
 day5 = do
-  ByteString.putStr $ fromString "day5a: " <> take8NonZero
-  putStrLn ""
-  ByteString.putStr $ fromString "day5b: " <> buildPW (fromString "xxxxxxxx") "01234567" has5Zero
-  putStrLn ""
+  x : y : _ <- splitOn "\n\n" <$> readFile "input5.txt"
+  let crates = buildCrates x
+      instructions = buildIns y
+  putStrLn $ ("day5a: " <>) $ map (last . snd) $ IM.toList $ foldl' readInsStack crates instructions
+  putStrLn $ ("day5b: " <>) $ map (last . snd) $ IM.toList $ foldl' readInsQueue crates instructions
