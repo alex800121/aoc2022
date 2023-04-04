@@ -4,7 +4,7 @@ import MyLib
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Data.Maybe
-import Data.List (nub, sort)
+import Data.List (nub, sort, foldl', findIndex, find)
 
 type Index = (Int, Int)
 type Range = (Int, Int)
@@ -46,7 +46,18 @@ atY y s@(Cons (a, b) (Cons (c, d) Nil))
     x2 = b - y
     x3 = a - y
     x4 = d + y
+
+toSensor :: Sensor' -> Sensor
+toSensor (a@(x, y), b@(x', y')) = let r = manhattan' a b in Cons (x + y - r, x + y + r + 1) $ Cons (x - y - r, x - y + r + 1) Nil
     
+toCenter :: Sensor -> Index
+toCenter (Cons (a, b) (Cons (c, d) Nil)) = let
+  x = (a + b - 1) `div` 2
+  y = (c + d - 1) `div` 2
+  x' = (x + y) `div` 2
+  y' = (x - y) `div` 2
+  in (x', y')
+
 sensorParser' :: Parser Sensor'
 sensorParser' = do
   string "Sensor at x="
@@ -79,6 +90,10 @@ day15 = do
       y = 2000000
       y' = 10
       beaconsAtY n = nub $ filter ((== n) . snd) $ map snd sensors'
-      searchArea
+      searchArea = [toSensor ((2000000, 2000000), (0, 4000000))]
+      -- searchArea' = [toSensor ((11, 14), (11, 23))]
+      findY = fromJust $ findIndex (\x -> length x /= 1 && (let x' = snd $ head x in x' <= 4000000 && x' >= 0)) $ map (\x -> fuseRange . sort $ mapMaybe (atY x) sensors) [0..4000000]
   putStrLn $ ("day15a: " ++) $ show $ subtract (length (beaconsAtY y)) $ sum $ map (uncurry subtract) $ fuseRange $ sort $ mapMaybe (atY y) sensors
-  putStrLn $ ("day15b: " ++) $ show $ subtractEucVecs sensors []
+  -- putStrLn $ ("day15b: " ++) $ show $ 4000000 * fromIntegral (snd $ head $ fuseRange $ sort $ mapMaybe (atY findY) sensors) + findY
+  putStrLn $ ("day15b: " ++) $ show $ (\(a, b) -> 4000000 * toInteger a + toInteger b) $ fromJust $ find (\(x, y) -> x >= 0 && y >= 0 && x <= 4000000 && y <= 4000000) $ map toCenter $ subtractEucVecs sensors searchArea
+  -- print sensors

@@ -254,20 +254,15 @@ overlapEucVec (Cons (a, b) xs) (Cons (c, d) ys)
     maxOfSmall = max a c
     minOfBig = max b d
 
+ 
 subtractEucVec :: Ord a => Vec n (a, a) -> Vec n (a, a) -> [Vec n (a, a)]
-subtractEucVec Nil Nil = [Nil]
+subtractEucVec Nil Nil = []
 subtractEucVec (Cons (a, b) xs) (Cons (c, d) ys) =
-     [ Cons (x, y) ys | (x, y) <- [(c, a), (b, d)], y > x ]
-  ++ [ Cons (x', y') rest | (x', y') <- [(max a c, min b d)], y' > x', rest <- subtractEucVec' xs ys ]
-subtractEucVec' :: Ord a => Vec n (a, a) -> Vec n (a, a) -> [Vec n (a, a)]
-subtractEucVec' Nil Nil = []
-subtractEucVec' (Cons (a, b) xs) (Cons (c, d) ys) =
-     [ Cons (x, y) ys | (x, y) <- [(c, a), (b, d)], y > x ]
-  ++ [ Cons (x', y') rest | (x', y') <- [(max a c, min b d)], y' > x', rest <- subtractEucVec' xs ys ]
+     [ Cons (x, y) ys | (x, y) <- [(max b c, d), (c, min a d)], y > x ]
+  ++ [ Cons (x', y') rest | (x', y') <- [(max a c, min b d)], y' > x', rest <- subtractEucVec xs ys ]
 
 subtractEucVecs' :: Ord a => Vec n (a, a) -> [Vec n (a, a)] -> [Vec n (a, a)]
 subtractEucVecs' x = concatMap (subtractEucVec x)
-
 
 subtractEucVecs :: Ord a => [Vec n (a, a)] -> [Vec n (a, a)] -> [Vec n (a, a)]
 subtractEucVecs xs ys = foldr' subtractEucVecs' ys xs
@@ -284,3 +279,6 @@ jointEucVecs = foldl' jointEucVecs' []
 fromVec :: Vec n a -> [a]
 fromVec Nil = []
 fromVec (Cons x xs) = x : fromVec xs
+
+vTail :: Vec (S n) a -> Vec n a
+vTail (Cons _ xs) = xs
