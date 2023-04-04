@@ -1,83 +1,48 @@
 module Day17 (day17) where
 
 import MyLib
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as BS
-import Data.ByteString.Base16
-import Data.Set (Set)
-import Crypto.Hash.MD5
-import qualified Data.Set as Set
-import Debug.Trace
+import Data.Word
+import GHC.Bits
+import Data.Vector (Vector)
+import qualified Data.Vector as V
 
-type Index = (Int, Int)
-type Bounds = (Index, Index)
-data GameState = G { pos :: Index, des :: Index, pw :: ByteString, path :: ByteString }
-  deriving (Show, Eq)
+type Shape = [Word8]
+data Board = Board { board :: [Word8], windPos :: Int, windLen :: Int, wind :: Wind }
+type Wind = Vector (Shape -> Shape)
 
-instance Ord GameState where
-  compare (G p1 d1 pw1 s1) (G p2 d2 pw2 s2) =
-       compare (BS.length s1 + manhattan' p1 d1) (BS.length s2 + manhattan' p2 d2)
-    <> compare (BS.length s1) (BS.length s2)
-    <> compare (manhattan' p1 d1) (manhattan' p2 d2)
-    <> compare s1 s2
-    <> compare p2 p1
-    <> compare pw1 pw2
-    <> compare d1 d2
+instance Show Board where
+  show (Board b wp _ _) = drawShape b ++ '\n' : show wp
+  
+shapes :: [Shape]
+shapes = [ [120], [16, 56, 16], [32, 32, 56], [8, 8, 8, 8], [24, 24] ]
 
-manhattan' :: Num a => (a, a) -> (a, a) -> a
-manhattan' (a, b) (c, d) = abs (a - c) + abs (b - d)
+drawShape :: Shape -> String
+drawShape = unlines . map (\y -> map ((\x -> if x then '#' else '.') . testBit y) [1..7])
 
-withinBounds :: Bounds -> Index -> Bool
-withinBounds ((minX, minY), (maxX, maxY)) (x, y) =
-     minX <= x
-  && maxX >= x
-  && minY <= y
-  && maxY >= y
+inBound :: Shape -> Bool
+inBound = all even
 
-choices :: Bounds -> GameState -> Set GameState
-choices bounds g@(G _ _ pw path) = Set.filter (withinBounds bounds . (.pos)) $ Set.map (f g) next
+moveLeft :: Shape -> Shape
+moveLeft = map (`rotateR` 1)
+
+moveRight :: Shape -> Shape
+moveRight = map (`rotateL` 1)
+
+nextShape :: Board -> Shape -> Board
+nextShape (Board b wp wl w) s = f (replicate (3 + length s) 0 ++ b) wp wl w s
   where
-    next = Set.fromList $ map fst $ filter snd $ zip "UDLR" $ map (`elem` "bcdef") $ take 4 $ BS.unpack $ encode $ hash $ pw <> path
-    f (G pos' des' pw' path') x = G (pos' +& y) des' pw' (BS.snoc path' x)
+    f b' wp' wl' w' s'
+      | inBound s'' && all (== 0) (zipWith (.&.) s'' b') = g b' (wp' + 1 `mod` wl') wl' w' s''
+      | otherwise = g b' (wp' + 1 `mod` wl') wl' w' s'
       where
-        y = case x of
-          'U' -> (0, -1)
-          'D' -> (0, 1)
-          'L' -> (-1, 0)
-          'R' -> (1, 0)
-    
-
-aStar :: Bounds -> Set GameState -> GameState
-aStar bounds pool
-  -- | trace (show picked) False = undefined
-  | pos picked == des picked = picked
-  | otherwise = aStar bounds pool'
-  where
-    (picked, rest) = Set.deleteFindMin pool
-    next = choices bounds picked
-    pool' = Set.union next rest
-
-bfs :: Bounds -> Set GameState -> Set GameState -> Set GameState
-bfs bounds pool reached
-  | Set.null pool = reached
-  | otherwise = bfs bounds next (Set.union done reached)
-  where
-    (done, notDone) = Set.partition (\x -> x.pos == x.des) pool
-    next = Set.unions $ Set.map (choices bounds) notDone
-    
-input :: ByteString
-input = BS.pack "pxxbnzuo"
-
-initGameState :: GameState
-initGameState = G (0, 0) (3, 3) input BS.empty
-
-initBounds :: Bounds
-initBounds = ((0, 0), (3, 3))
-
-test :: ByteString
-test = BS.pack "ulqzkmiv"
+        s'' = w' V.! wp' $ s'
+    g b' wp' wl' w' s'
+      | length s'' <= length b' && all (== 0) (zipWith (.&.) s'' b') = f b' wp' wl' w' s''
+      | otherwise = Board (dropWhile (== 0) $ zipWith (.&.) s'' b') wp' wl' w'
+      where
+        s'' = 0 : s'
 
 day17 :: IO ()
 day17 = do
-  putStrLn $ ("day17a: " ++) $ BS.unpack $ path $ aStar initBounds (Set.singleton initGameState)
-  putStrLn $ ("day17b: " ++) $ show $ maximum $ Set.map (BS.length . path) $ bfs initBounds (Set.singleton initGameState) Set.empty
+  putStrLn $ ("day17a: " ++) $ show ""
+  putStrLn $ ("day17b: " ++) $ show ""
