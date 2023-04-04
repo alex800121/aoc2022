@@ -14,6 +14,10 @@ import Debug.Trace
 type Valve = String
 type ValveFlow = Map Valve Int
 type ValveMap = Map Valve (Map Valve Int)
+data GameState = G { accPressure :: Int, time :: Int, closedValves :: ValveFlow, valveMap :: ValveMap }
+
+timeLimitA :: Int
+timeLimitA = 30
 
 valveParser :: Parser (ValveFlow, ValveMap)
 valveParser = (eof >> pure (Map.empty, Map.empty)) <|> do
@@ -39,7 +43,8 @@ buildMap ref acc
 
 day16 :: IO ()
 day16 = do
-  (valveFlow, valveMap) <- (\(x, y) -> (Map.filterWithKey (\k a -> a /= 0 || k == "AA") x, buildMap y (Map.filterWithKey (\k _ -> k == "AA" || (x Map.! k /= 0)) y))) . fromJust . parseMaybe valveParser <$> readFile "input16.txt"
+  -- (valveFlow, valveMap) <- (\(x, y) -> (Map.filterWithKey (\k a -> a /= 0 || k == "AA") x, buildMap y (Map.filterWithKey (\k _ -> k == "AA" || (x Map.! k /= 0)) y))) . fromJust . parseMaybe valveParser <$> readFile "input16.txt"
+  (valveFlow, valveMap) <- (\(x, y) -> (Map.filter (/= 0) x, buildMap y (Map.filterWithKey (\k _ -> k == "AA" || (x Map.! k /= 0)) y))) . fromJust . parseMaybe valveParser <$> readFile "test16.txt"
   print valveFlow
   print valveMap
   putStrLn $ ("day16a: " ++) $ show ""
