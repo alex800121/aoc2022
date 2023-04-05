@@ -1,6 +1,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
 module MyLib where
 
 import Text.Megaparsec
@@ -18,6 +21,7 @@ import Data.List (delete, tails, group, nub, foldl')
 import Data.Maybe (fromMaybe, maybeToList)
 import Debug.Trace
 import Control.Monad (guard, mplus)
+import Data.Proxy (Proxy (..))
 
 (+&):: (Num a, Num b) => (a, b) -> (a, b) -> (a, b)
 (a, b) +& (c, d) = (a + c, b + d)
@@ -186,9 +190,18 @@ primeSeive = f [2..]
     f (x : xs) = x : f (filter ((/= 0) . (`mod` x)) xs)
 
 data Nat = Z | S Nat deriving (Eq, Ord)
+data SNat (n :: Nat) where
+  SZ :: SNat Z
+  SS :: SNat n -> SNat (S n)
+  
 data Vec (n :: Nat) a where
   Nil :: Vec 'Z a
   Cons :: a -> Vec n a -> Vec (S n) a
+
+deriving instance Eq a => Eq (Vec n a)
+deriving instance Ord a => Ord (Vec n a)
+deriving instance Functor (Vec n)
+deriving instance Foldable (Vec n)
 
 instance Show Nat where
   show n = show' 0 n
@@ -196,10 +209,10 @@ instance Show Nat where
       show' n Z = "Nat" ++ show n
       show' n (S x) = show' (n + 1) x
 
-instance Eq a => Eq (Vec 'Z a) where
-  Nil == Nil = True
-instance (Eq a, Eq (Vec n a)) => Eq (Vec ('S n) a) where
-  Cons x xs == Cons y ys = x == y && xs == ys
+-- instance Eq a => Eq (Vec 'Z a) where
+--   Nil == Nil = True
+-- instance (Eq a, Eq (Vec n a)) => Eq (Vec ('S n) a) where
+--   Cons x xs == Cons y ys = x == y && xs == ys
   
 instance Show a => Show (Vec n a) where
   show Nil = "<>"
@@ -209,11 +222,11 @@ instance Show a => Show (Vec n a) where
       show' Nil = ">"
       show' (Cons y ys) = ',' : show y ++ show' ys
 
-instance Functor (Vec 'Z) where
-  fmap _ Nil = Nil
+-- instance Functor (Vec 'Z) where
+--   fmap _ Nil = Nil
 
-instance Functor (Vec n) => Functor (Vec ('S n)) where
-  fmap f (Cons x xs) = Cons (f x) (fmap f xs)
+-- instance Functor (Vec n) => Functor (Vec ('S n)) where
+--   fmap f (Cons x xs) = Cons (f x) (fmap f xs)
 
 instance Applicative (Vec 'Z) where
   pure _ = Nil
@@ -240,8 +253,7 @@ instance (Num a, Num (Vec n a), Applicative (Vec n)) => Num (Vec ('S n) a) where
   negate (Cons x xs) = Cons (negate x) (negate xs)
 
 manhattan :: Num a => Vec n a -> a
-manhattan Nil = 0
-manhattan (Cons x xs) = x + manhattan xs
+manhattan = sum . fmap abs
 
 overlapEucVec :: Ord a => Vec n (a, a) -> Vec n (a, a) -> Maybe (Vec n (a, a))
 overlapEucVec Nil Nil = pure Nil
@@ -279,6 +291,15 @@ jointEucVecs = foldl' jointEucVecs' []
 fromVec :: Vec n a -> [a]
 fromVec Nil = []
 fromVec (Cons x xs) = x : fromVec xs
+
+toVec :: SNat n -> [a] -> Vec n a
+toVec SZ _ = Nil
+toVec (SS _) [] = error "Given Vec length is longer than given list"
+toVec (SS n) (x : xs) = Cons x $ toVec n xs
+
+vZipWith :: (a -> b -> c) -> Vec n a -> Vec n b -> Vec n c
+vZipWith _ Nil Nil = Nil
+vZipWith f (Cons x xs) (Cons y ys) = Cons (f x y) $ vZipWith f xs ys
 
 vTail :: Vec (S n) a -> Vec n a
 vTail (Cons _ xs) = xs
