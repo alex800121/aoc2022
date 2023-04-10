@@ -1,10 +1,8 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use <$>" #-}
 module Day19 (day19) where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad (guard)
 import Data.Either
 import Data.List
 import Data.List.Split
@@ -22,7 +20,7 @@ type RobotCosts = [(Robots, Geodes)]
 
 type Geodes = [Int]
 
-data GameState = G {getTimer :: Int, getGeodes :: Geodes, getRobots :: Robots, getBlueprint :: Int, getRobotCosts :: RobotCosts}
+data GameState = G {getTimer :: Int, getGeodes :: Geodes, getRobots :: Robots, getBlueprint :: Int, getRobotCosts :: RobotCosts, maxRobots :: Geodes}
   deriving (Show, Eq, Ord)
 
 blueprintParser :: Parser [GameState]
@@ -41,6 +39,8 @@ blueprintParser =
     string "Each geode robot costs" <* space
     go <- signedInteger <* space <* string "ore and" <* space
     gb <- signedInteger <* space <* string "obsidian." <* space
+    let addRobots = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        robotCosts = undefined
     ( G
         24
         [0, 0, 0, 0]
@@ -52,20 +52,23 @@ blueprintParser =
                 (map reverse [[oo, 0, 0, 0], [co, 0, 0, 0], [bo, bc, 0, 0], [go, 0, gb, 0]])
             )
         )
+        undefined
         :
       )
       <$> blueprintParser
 
 choices :: GameState -> [Either Int GameState]
-choices (G ti ge ro bl rc)
-  | and (zipWith (>=) ge obCost) = pure $ (if ti - 1 == 0 then Left . head . getGeodes else Right) (G (ti - 1) (zipWith subtract obCost $ zipWith (+) ge ro) ((head ro + 1) : tail ro) bl rc)
+choices (G ti ge ro bl rc mrc)
+  | and (zipWith (>=) ge obCost) = pure $ (if ti - 1 == 0 then Left . head . getGeodes else Right) (G (ti - 1) (zipWith subtract obCost $ zipWith (+) ge ro) ((head ro + 1) : tail ro) bl rc mrc)
   | otherwise = do
       (addRobots, robotCosts) <- rc
       let needRobots = zipWith subtract ge robotCosts
+          robotAdded = zipWith (+) ro addRobots
+      guard $ and $ zipWith (>=) mrc robotAdded
       t <- (+ 1) . maximum <$> zipWithM myDiv needRobots ro
       case compare t ti of
-        LT -> pure $ Right (G (ti - t) (zipWith subtract robotCosts $ zipWith (+) ge (map (* t) ro)) (zipWith (+) ro addRobots) bl rc)
-        _ -> pure $ Left $ head $ getGeodes (G 0 (zipWith (+) ge (map (* ti) ro)) ro bl rc)
+        LT -> pure $ Right (G (ti - t) (zipWith subtract robotCosts $ zipWith (+) ge (map (* t) ro)) robotAdded bl rc mrc)
+        _ -> pure $ Left $ head $ getGeodes (G 0 (zipWith (+) ge (map (* ti) ro)) ro bl rc mrc)
   where
     obCost = snd $ head rc
 
@@ -75,7 +78,7 @@ day19a m xs = day19a m' (concatMap choices xs')
   where
     (ys, xs') = filter ((m <) . potential) <$> partitionEithers xs
     m' = maximum (m : ys)
-    potential (G ti ge ro bl rc) = head ge + ((ti * ((2 * last ro) + ti - 1)) `div` 2)
+    potential (G ti ge ro bl rc mrc) = head ge + ((ti * ((2 * last ro) + ti - 1)) `div` 2)
 
 myDiv :: (Integral a, Alternative m) => a -> a -> m a
 myDiv n m
