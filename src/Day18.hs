@@ -18,7 +18,7 @@ inBound :: Ord a => (Vec n a, Vec n a) -> Vec n a -> Bool
 inBound (minV, maxV) x = and (vZipWith (<=) minV x) && and (vZipWith (>=) maxV x)
 
 adjacents :: Set Index
-adjacents = Set.fromList $ map (toVec (SS (SS (SS SZ)))) $ [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, -1], [0, 0, 1]] 
+adjacents = Set.fromList $ map (toVec (SS (SS (SS SZ)))) [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, -1], [0, 0, 1]] 
 
 flood :: (Index -> Bool) -> Set Index -> Set Index -> Set Index
 flood f acc starts
