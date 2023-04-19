@@ -1,91 +1,72 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use head" #-}
+
 module Day23 (day23) where
 
+import Data.List
+import qualified Data.Map as Map
+import Data.MultiSet (MultiSet)
+import qualified Data.MultiSet as Set
+import MyLib hiding (Direction (..))
 
-import MyLib hiding (Nat (..))
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Text.Megaparsec
-import Text.Megaparsec.Char
-import Data.Char
-import Data.Maybe (fromJust)
-import Data.Vector (Vector)
-import qualified Data.Vector as Vector
-import qualified Data.Vector.Mutable as MV
-import Control.Monad (when)
-import Debug.Trace
+data Direction = North | South | West | East
+  deriving (Eq, Show, Ord)
 
-type Registers = IntMap Int
-type Register = Int
-data RorI = R Int | I Int deriving (Show, Eq, Ord)
-data Instruction where
-  Cpy :: RorI -> RorI -> Instruction
-  Inc :: RorI -> Instruction
-  Dec :: RorI -> Instruction
-  Jnz :: RorI -> RorI -> Instruction
-  Tgl :: RorI -> Instruction
-  deriving (Show, Eq)
-type Instructions = Vector Instruction
-data GameState = G { step :: Int, regs :: Registers, instructions :: Instructions } deriving (Show, Eq)
+type Index = (Int, Int)
 
-initRegisters :: Registers
-initRegisters = IntMap.fromList [(ord x, 0) | x <- ['a' .. 'd']]
+type Set = MultiSet
 
-registerParser :: Parser Register
-registerParser = ord <$> anySingle <* space
+instance Enum Direction where
+  fromEnum North = 0
+  fromEnum South = 1
+  fromEnum West = 2
+  fromEnum East = 3
+  toEnum n = case n `mod` 4 of
+    0 -> North
+    1 -> South
+    2 -> West
+    3 -> East
 
-roriParser :: Parser RorI
-roriParser = (I <$> signedInteger <* space) <|> (R <$> registerParser)
+readInput :: String -> Set Index
+readInput = Set.fromMap . drawMap (\case '#' -> Just 1; _ -> Nothing) . lines
 
-inputParser :: Parser [Instruction]
-inputParser =
-  ( eof >> pure [] ) <|>
-  ( string "cpy" >> space >> ((:) <$> ((Cpy <$> roriParser <*> roriParser) <* space) <*> inputParser) ) <|>
-  ( string "inc" >> space >> ((:) <$> ((Inc <$> roriParser) <* space) <*> inputParser) ) <|>
-  ( string "dec" >> space >> ((:) <$> ((Dec <$> roriParser) <* space) <*> inputParser) ) <|>
-  ( string "jnz" >> space >> ((:) <$> ((Jnz <$> roriParser <*> roriParser) <* space) <*> inputParser) ) <|>
-  ( string "tgl" >> space >> ((:) <$> (Tgl <$> roriParser <* space) <*> inputParser) )
+surrounds :: Set Index
+surrounds = Set.fromList [(x, y) | x <- [-1 .. 1], y <- [-1 .. 1], (x, y) /= (0, 0)]
 
-interpretIns :: GameState -> GameState
--- interpretIns g@(G i r inss) = case inss Vector.!? i of
-interpretIns g@(G i r inss) = trace (show (i, r)) $ case inss Vector.!? i of
-  Nothing -> g
-  Just ins -> case ins of
-    Cpy roi1 roi2 -> case roi2 of
-      I _ -> G (i + 1) r inss
-      R reg -> G (i + 1) (IntMap.insert reg (interpretRorI r roi1) r) inss
-    Inc reg -> case reg of
-      I _ -> G (i + 1) r inss
-      R reg -> G (i + 1) (IntMap.insertWith (+) reg 1 r) inss
-    Dec reg -> case reg of
-      I _ -> G (i + 1) r inss
-      R reg -> G (i + 1) (IntMap.insertWith subtract reg 1 r) inss
-    Jnz roi1 roi2 -> G (i + if interpretRorI r roi1 == 0 then 1 else interpretRorI r roi2) r inss
-    Tgl roi -> let i' = i + interpretRorI r roi in G (i + 1) r $
-      if i' < length inss && i >= 0 then Vector.modify (\v -> MV.modify v toggle (i + interpretRorI r roi)) inss else inss
-    
-toggle :: Instruction -> Instruction
-toggle (Inc x) = Dec x
-toggle (Dec x) = Inc x
-toggle (Tgl x) = Inc x
-toggle (Jnz x y) = Cpy x y
-toggle (Cpy x y) = Jnz x y
+toDir :: Direction -> (Index, Set Index)
+toDir North = ((0, -1), Set.fromList [(x, -1) | x <- [-1 .. 1]])
+toDir South = ((0, 1), Set.fromList [(x, 1) | x <- [-1 .. 1]])
+toDir West = ((-1, 0), Set.fromList [(-1, x) | x <- [-1 .. 1]])
+toDir East = ((1, 0), Set.fromList [(1, x) | x <- [-1 .. 1]])
 
-interpretRorI :: Registers -> RorI -> Int
-interpretRorI r roi = case roi of
-  R i -> r IntMap.! i
-  I i -> i
-
-fib :: [Int]
-fib = f 1 1
+proposeMove :: Set Index -> Direction -> Index -> Index
+proposeMove s d i
+  | Set.null (Set.intersection s (Set.map (+& i) surrounds)) = i
+  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 0)))) = i +& fst (d' !! 0)
+  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 1)))) = i +& fst (d' !! 1)
+  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 2)))) = i +& fst (d' !! 2)
+  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 3)))) = i +& fst (d' !! 3)
+  | otherwise = i
   where
-    f x y = x : f y (x + y)
-    
+    d' = map toDir $ iterate succ d
+
+step :: Set Index -> Int -> Set Index
+step s n = restrictedMove
+  where
+    d = toEnum n
+    draft = Set.map (proposeMove s d) s
+    restrictedMove = Set.map (\x -> let x' = proposeMove s d x in if x' `Set.occur` draft > 1 then x else x') s
+
+step' :: Int -> Set Index -> Int
+step' n s = if s' == s then n + 1 else step' (n + 1) s'
+  where
+    s' = step s n
+
 day23 :: IO ()
 day23 = do
-  -- ins <- Vector.fromList . fromJust . parseMaybe inputParser <$> readFile "test23.txt"
-  ins <- Vector.fromList . fromJust . parseMaybe inputParser <$> readFile "input23.txt"
-  -- putStrLn $ ("day22a: " ++) $ show $ firstRepeat $ iterate interpretIns (G 0 (IntMap.insert 97 7 initRegisters) ins)
-  putStrLn $ ("day22a: " ++) $ show $ product [1..7] + (98 * 86)
-  -- putStrLn $ ("day22b: " ++) $ show $ firstRepeat $ iterate interpretIns (G 0 (IntMap.insert 97 12 initRegisters) ins)
-  putStrLn $ ("day23a: " ++) $ show $ product [1..12] + (98 * 86)
+  input <- readInput <$> readFile "input23.txt"
+  -- input <- readInput <$> readFile "test23.txt"
+  putStrLn $ ("day23a: " ++) $ show $ length $ filter (== '.') $ concat $ drawGraph (\case Nothing -> '.'; Just 1 -> '#'; Just _ -> 'X') $ Set.toMap $ foldl' step input [0 .. 9]
+  putStrLn $ ("day23a: " ++) $ show $ step' 0 input

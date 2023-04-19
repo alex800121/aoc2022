@@ -1,89 +1,109 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Day21 (day21) where
 
+import Control.Applicative ((<|>))
+import Data.Char
+import Data.List
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Maybe (fromJust)
+import Debug.Trace
 import MyLib
-import Data.Sequence (Seq(..))
-import qualified Data.Sequence as Seq
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import Data.Maybe (fromJust)
-import Data.List
-import Data.Foldable
 
-initPW :: Seq Char
-initPW = Seq.fromList "abcdefgh"
+data Op = Plus | Minus | Multiply | Divide deriving (Show, Eq, Ord)
 
-scrambledPW :: Seq Char
-scrambledPW = Seq.fromList "fbgdceah"
+data Monkey a = Yell a | Calc Op (Monkey a) (Monkey a) deriving (Show, Eq, Ord)
 
-data Ins = SwapPos Int Int
-         | SwapLet Char Char
-         | Rotate Int
-         | RotateOn Char
-         | RevPos Int Int
-         | MovePos Int Int
-  deriving (Show, Eq, Ord)
+type MonkeyName a = Map String (Monkey a)
 
-rotateL :: Seq a -> Seq a
-rotateL (x :<| xs) = xs :|> x
+newtype Alg a = Alg [a] deriving (Show, Eq)
 
-rotateR :: Seq a -> Seq a
-rotateR (xs :|> x) = x :<| xs
+instance (Num a) => Num (Alg a) where
+  Alg a + Alg b = Alg (zipWith' (+) a b)
+  Alg a - Alg b = Alg (zipWith' (-) a b)
+  Alg a * Alg b = Alg (mul a b)
+    where
+      mul a b = foldl1' (zipWith' (+)) $ zipWith (\x -> map (* x)) a $ [x ++ b | x <- map (`replicate` 0) [0 ..]]
 
-readIns :: Seq Char -> Ins -> Seq Char
-readIns s (SwapPos x y) = Seq.adjust' (const (Seq.index s y)) x
-                        $ Seq.adjust' (const (Seq.index s x)) y s
-readIns s (SwapLet a b) = Seq.adjust' (const b) x
-                        $ Seq.adjust' (const a) y s
+zipWith' _ [] xs = xs
+zipWith' _ xs [] = xs
+zipWith' g (x : xs) (y : ys) = g x y : zipWith' g xs ys
+
+reduceMonkeyTree :: Monkey (Alg Integer) -> Monkey (Alg Integer)
+reduceMonkeyTree m = let m' = f m in if m == m' then m else reduceMonkeyTree m'
   where
-    Just x = Seq.elemIndexL a s
-    Just y = Seq.elemIndexL b s
-readIns s (Rotate n)
-  | n >= 0 = iterate rotateR s !! n
-  | otherwise = iterate rotateL s !! negate n
-readIns s (RotateOn c) = iterate rotateR s !! (x + 1 + if x >= 4 then 1 else 0)
-  where
-    Just x = Seq.elemIndexL c s
-readIns s (RevPos x y) = Seq.take x s <> Seq.reverse (Seq.take (y - x + 1) $ Seq.drop x s) <> Seq.drop (y + 1) s
-readIns s (MovePos x y) = Seq.insertAt y a $ Seq.deleteAt x s
-  where
-    a = Seq.index s x
+    f (Yell a) = Yell a
+    f (Calc Divide a b) = case (reduceMonkeyTree a, reduceMonkeyTree b) of
+      (Yell (Alg [a']), Yell (Alg [b'])) -> Yell $ Alg [a' `div` b']
+      (a', b') -> Calc Divide a' b'
+    f (Calc op a b) = case (reduceMonkeyTree a, reduceMonkeyTree b) of
+      (Yell a', Yell b') -> Yell $ interpretOp' op a' b'
+      (a', b') -> Calc op a' b'
 
-unscramble :: Seq Char -> Ins -> Seq Char
-unscramble s (SwapPos x y) = Seq.adjust' (const (Seq.index s y)) x
-                           $ Seq.adjust' (const (Seq.index s x)) y s
-unscramble s (SwapLet a b) = Seq.adjust' (const b) x
-                           $ Seq.adjust' (const a) y s
-  where
-    Just x = Seq.elemIndexL a s
-    Just y = Seq.elemIndexL b s
-unscramble s (Rotate n)
-  | n >= 0 = iterate rotateL s !! n
-  | otherwise = iterate rotateR s !! negate n
-unscramble s (RevPos x y) = Seq.take x s <> Seq.reverse (Seq.take (y - x + 1) $ Seq.drop x s) <> Seq.drop (y + 1) s
-unscramble s (MovePos y x) = Seq.insertAt y a $ Seq.deleteAt x s
-  where
-    a = Seq.index s x
-unscramble s (RotateOn c)
-  | odd x = iterate rotateL s !! ((x + 1) `div` 2)
-  | otherwise = iterate rotateL s !! (((((x - 1) `mod` 8) + 1) `div` 2) + 5)
-  where
-    Just x = Seq.elemIndexL c s
--- unscramble s (RotateOn c) = iterate rotateR s !! (x + 1 + if x >= 4 then 1 else 0)
---   where
---     Just x = Seq.elemIndexL c s
+monkeyParser :: (String -> Parser a) -> Parser (Map String (Either a (String, Op, String)))
+monkeyParser f =
+  (eof >> pure Map.empty) <|> do
+    name <- some (anySingleBut ':') <* char ':' <* space
+    n <-
+      (Left <$> f name <* space) <|> do
+        a <- some (satisfy (not . isSpace)) <* space
+        b <- (\case '+' -> Plus; '-' -> Minus; '*' -> Multiply; '/' -> Divide) <$> anySingle <* space
+        c <- some (satisfy (not . isSpace)) <* space
+        pure $ Right (a, b, c)
+    Map.insert name n <$> monkeyParser f
 
-insParser :: Parser Ins
-insParser =
-      ( MovePos <$> (string "move position " >> signedInteger) <*> (string " to position " >> signedInteger) )
-  <|> ( SwapPos <$> (string "swap position " >> signedInteger) <*> (string " with position " >> signedInteger) )
-  <|> ( RevPos <$> (string "reverse positions " >> signedInteger) <*> (string " through " >> signedInteger) )
-  <|> ( Rotate <$> (string "rotate right " >> signedInteger <* string " step" <* optional (char 's')) )
-  <|> ( Rotate <$> (string "rotate left " >> (negate <$> signedInteger) <* string " step" <* optional (char 's')) )
-  <|> ( RotateOn <$> (string "rotate based on position of letter " >> anySingle) )
-  <|> ( SwapLet <$> (string "swap letter " >> anySingle) <*> (string " with letter " >> anySingle) )
+buildMonkeyTree :: Map String (Either a (String, Op, String)) -> String -> Monkey a
+buildMonkeyTree m s = case m Map.! s of
+  Left i -> Yell i
+  Right (a, b, c) -> Calc b (buildMonkeyTree m a) (buildMonkeyTree m c)
+
+calcMonkeyTree :: (Op -> a -> a -> a) -> Monkey a -> a
+calcMonkeyTree f (Yell a) = a
+calcMonkeyTree f (Calc a b c) = f a (calcMonkeyTree f b) (calcMonkeyTree f c)
+
+interpretOp :: (Integral a) => Op -> a -> a -> a
+interpretOp Plus = (+)
+interpretOp Minus = (-)
+interpretOp Multiply = (*)
+interpretOp Divide = div
+
+interpretOp' :: (Num a) => Op -> a -> a -> a
+interpretOp' Plus = (+)
+interpretOp' Minus = (-)
+interpretOp' Multiply = (*)
+
+day21bParser :: String -> Parser (Alg Integer)
+day21bParser "humn" = signedInteger >> pure (Alg [0, 1])
+day21bParser _ = signedInteger >>= \x -> pure (Alg [fromIntegral x])
+
+instance (Show a) => Show (Monkey (Alg a) -> Monkey (Alg a)) where
+  show f = show (f (Yell (Alg [])))
+
+solveEqual :: (Monkey (Alg Integer), Monkey (Alg Integer)) -> (Alg Integer, Alg Integer)
+-- solveEqual (a, b) | trace (show a ++ "\n-----------\n" ++ show b ++ "\n===========\n") False = undefined
+solveEqual (Yell a, Yell b) = (a, b)
+solveEqual (Yell d, Calc a b c) = solveEqual (Calc a b c, Yell d)
+solveEqual (Calc Multiply a b, x) = case reduceMonkeyTree $ Calc Divide x b of
+  Yell x' -> solveEqual (reduceMonkeyTree a, reduceMonkeyTree (Yell x'))
+  y' -> solveEqual (reduceMonkeyTree b, reduceMonkeyTree $ Calc Divide x a)
+solveEqual (Calc Plus a b, x) = case reduceMonkeyTree $ Calc Minus x b of
+  Yell x' -> solveEqual (reduceMonkeyTree a, reduceMonkeyTree (Yell x'))
+  y' -> solveEqual (reduceMonkeyTree b, reduceMonkeyTree $ Calc Minus x a)
+solveEqual (Calc Minus a b, x) = case reduceMonkeyTree $ Calc Plus x b of
+  Yell x' -> solveEqual (reduceMonkeyTree a, reduceMonkeyTree (Yell x'))
+  y' -> solveEqual (reduceMonkeyTree b, reduceMonkeyTree $ Calc Minus a x)
+solveEqual (Calc Divide a b, x) = solveEqual (reduceMonkeyTree a, reduceMonkeyTree $ Calc Multiply x b)
 
 day21 :: IO ()
 day21 = do
-  ins <- map (fromJust . parseMaybe insParser) . lines <$> readFile "input21.txt"
-  putStrLn $ ("day21a: " ++) $ toList $ foldl' readIns initPW ins
-  putStrLn $ ("day21b: " ++) $ toList $ foldl' unscramble scrambledPW $ reverse ins
+  x <- readFile "input21.txt"
+  -- x <- readFile "test21.txt"
+  let input = fromJust $ parseMaybe (monkeyParser (const (fromIntegral <$> signedInteger))) x
+      input' = fromJust $ parseMaybe (monkeyParser day21bParser) x
+      Calc _ l r = buildMonkeyTree input' "root"
+  putStrLn $ ("day21a: " ++) $ show $ calcMonkeyTree interpretOp $ buildMonkeyTree input "root"
+  putStrLn $ ("day21b: " ++) $ show $ (\(x : y : _) -> negate x `div` y) $ (\(Alg x, Alg y) -> zipWith' (-) x y) $ solveEqual (reduceMonkeyTree l, reduceMonkeyTree r)
