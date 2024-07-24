@@ -1,9 +1,11 @@
 module Day2 (day2) where
 
-import MyLib
 import Data.Bifunctor
+import MyLib
+import Paths_AOC2022
 
 data RPS = Rock | Paper | Scissors deriving (Show, Eq, Ord)
+
 instance Enum RPS where
   toEnum n = case n `mod` 3 of
     0 -> Rock
@@ -41,9 +43,9 @@ calcPlayer (oppo, outcome) = (oppo', me oppo')
       "X" -> pred
       "Y" -> id
       "Z" -> succ
-      
+
 day2 :: IO ()
 day2 = do
-  guide <- map ((\(x : y : _) -> (x, y)) . words) . lines <$> readFile "input2.txt"
+  guide <- map ((\(x : y : _) -> (x, y)) . words) . lines <$> (getDataDir >>= readFile . (++ "/input/input2.txt"))
   putStrLn $ ("day2a: " ++) $ show $ sum $ map (uncurry roundScore . bimap guideA guideA) guide
   putStrLn $ ("day2b: " ++) $ show $ sum $ map (uncurry roundScore . calcPlayer) guide

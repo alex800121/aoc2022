@@ -7,10 +7,11 @@ import Control.Applicative ((<|>))
 import Data.Char
 import Data.List
 import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Debug.Trace
 import MyLib
+import Paths_AOC2022
 import Text.Megaparsec
 import Text.Megaparsec.Char
 
@@ -28,6 +29,10 @@ instance (Num a) => Num (Alg a) where
   Alg a * Alg b = Alg (mul a b)
     where
       mul a b = foldl1' (zipWith' (+)) $ zipWith (\x -> map (* x)) a $ [x ++ b | x <- map (`replicate` 0) [0 ..]]
+  abs = undefined
+  signum = undefined
+  fromInteger = undefined
+  negate = undefined
 
 zipWith' _ [] xs = xs
 zipWith' _ xs [] = xs
@@ -100,8 +105,7 @@ solveEqual (Calc Divide a b, x) = solveEqual (reduceMonkeyTree a, reduceMonkeyTr
 
 day21 :: IO ()
 day21 = do
-  x <- readFile "input21.txt"
-  -- x <- readFile "test21.txt"
+  x <- getDataDir >>= readFile . (++ "/input/input21.txt")
   let input = fromJust $ parseMaybe (monkeyParser (const (fromIntegral <$> signedInteger))) x
       input' = fromJust $ parseMaybe (monkeyParser day21bParser) x
       Calc _ l r = buildMonkeyTree input' "root"

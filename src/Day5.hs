@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Day5 (day5) where
 
+import Paths_AOC2022
 import MyLib
 import Data.List.Split
 import Data.List
@@ -29,7 +30,7 @@ readInsStack = readInsFunc reverse
 readInsQueue = readInsFunc id
 day5 :: IO ()
 day5 = do
-  x : y : _ <- splitOn "\n\n" <$> readFile "input5.txt"
+  x : y : _ <- splitOn "\n\n" <$> (getDataDir >>= readFile . (++ "/input/input5.txt")) 
   let crates = buildCrates x
       instructions = buildIns y
   putStrLn $ ("day5a: " <>) $ map (last . snd) $ IM.toList $ foldl' readInsStack crates instructions

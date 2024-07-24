@@ -2,6 +2,7 @@
 
 module Day24 (day24) where
 
+import Paths_AOC2022
 import Data.Array
 import Data.Function
 import Data.List
@@ -66,7 +67,7 @@ aStar bound blizzard s
 day24 :: IO ()
 day24 = do
   -- blizzard <- inputParser <$> readFile "test24.txt"
-  blizzard <- inputParser <$> readFile "input24.txt"
+  blizzard <- inputParser <$>(getDataDir >>= readFile . (++ "/input/input24.txt")) 
   let bound@((mx, my), (w, h)) = bounds blizzard
       start = (mx, my - 1)
       end = (w, h + 1)

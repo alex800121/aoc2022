@@ -1,10 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use head" #-}
 
 module Day23 (day23) where
 
+import Paths_AOC2022
 import Data.List
 import qualified Data.Map as Map
 import Data.MultiSet (MultiSet)
@@ -66,7 +64,7 @@ step' n s = if s' == s then n + 1 else step' (n + 1) s'
 
 day23 :: IO ()
 day23 = do
-  input <- readInput <$> readFile "input23.txt"
+  input <- readInput <$>(getDataDir >>= readFile . (++ "/input/input23.txt")) 
   -- input <- readInput <$> readFile "test23.txt"
   putStrLn $ ("day23a: " ++) $ show $ length $ filter (== '.') $ concat $ drawGraph (\case Nothing -> '.'; Just 1 -> '#'; Just _ -> 'X') $ Set.toMap $ foldl' step input [0 .. 9]
   putStrLn $ ("day23a: " ++) $ show $ step' 0 input

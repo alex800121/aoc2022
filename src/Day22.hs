@@ -2,6 +2,7 @@
 
 module Day22 (day22) where
 
+import Paths_AOC2022
 import Data.Bifunctor
 import Data.Function
 import Data.List
@@ -9,7 +10,7 @@ import Data.List.Split
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
-import MyLib
+import MyLib hiding (toIndex)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 
@@ -123,7 +124,7 @@ sideLen = round . sqrt . fromIntegral . (`div` 6) . length
 day22 :: IO ()
 day22 = do
   -- (instructions, plane) <- (\(y : x : _) -> (fromJust $ parseMaybe insParser x, drawMap (\case ' ' -> Nothing; '.' -> Just True; '#' -> Just False) $ lines y)) . splitOn "\n\n" <$> readFile "test22.txt"
-  (instructions, plane) <- (\(y : x : _) -> (fromJust $ parseMaybe insParser x, drawMap (\case ' ' -> Nothing; '.' -> Just True; '#' -> Just False) $ lines y)) . splitOn "\n\n" <$> readFile "input22.txt"
+  (instructions, plane) <- (\(y : x : _) -> (fromJust $ parseMaybe insParser x, drawMap (\case ' ' -> Nothing; '.' -> Just True; '#' -> Just False) $ lines y)) . splitOn "\n\n" <$>(getDataDir >>= readFile . (++ "/input/input22.txt")) 
   let startIndex = minimumBy (\x y -> (compare `on` snd) x y <> (compare `on` fst) x y) $ Map.keys plane
       initBot = (startIndex, East)
       cubeSide = foldCube $ planeToInitCube plane

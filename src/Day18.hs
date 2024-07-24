@@ -1,5 +1,6 @@
 module Day18 (day18) where
 
+import Paths_AOC2022
 import MyLib
 import Data.List.Split
 import Data.Function
@@ -37,7 +38,7 @@ calcSurface (Cons a (Cons b (Cons c Nil))) (Cons d (Cons e (Cons f Nil))) = 2 * 
 
 day18 :: IO ()
 day18 = do
-  input <- map (toVec (SS (SS (SS SZ))) . map (read @Int) . splitOn ",") . lines <$> readFile "input18.txt"
+  input <- map (toVec (SS (SS (SS SZ))) . map (read @Int) . splitOn ",") . lines <$> (getDataDir >>= readFile . (++ "/input/input18.txt")) 
   -- input <- map (toVec (SS (SS (SS SZ))) . map (read @Int) . splitOn ",") . lines <$> readFile "test18.txt"
   let day18a n = (6 * length n) - sum [1 | x <- n, y <- n, isAdjacent x y]
       minMax = bimap (subtract 1) (+ 1) $ foldl' (\(x, y) z -> (vZipWith min x z, vZipWith max y z)) (pure maxBound, pure minBound) input

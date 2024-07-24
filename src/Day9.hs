@@ -1,5 +1,6 @@
 module Day9 (day9) where
 
+import Paths_AOC2022
 import MyLib
 import Data.List
 
@@ -45,6 +46,6 @@ surrounds x y = x `elem`  [y +& (a, b) | a <- [(-1)..1], b <- [(-1)..1]]
   
 day9 :: IO ()
 day9 = do
-  input <- concatMap ((\(x, y) -> replicate y (x, 1)) . (\(x : y : _) -> (read @Dir x, read @Int y)) . words) . lines <$> readFile "input9.txt"
+  input <- concatMap ((\(x, y) -> replicate y (x, 1)) . (\(x : y : _) -> (read @Dir x, read @Int y)) . words) . lines <$> (getDataDir >>= readFile . (++ "/input/input9.txt")) 
   putStrLn $ ("day9a: " ++) $ show $ length $ nub $ map last $ scanl' step (replicate 2 (0, 0)) input
   putStrLn $ ("day9b: " ++) $ show $ length $ nub $ map last $ scanl' step (replicate 10 (0, 0)) input

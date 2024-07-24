@@ -1,5 +1,6 @@
 module Day20 (day20) where
 
+import Paths_AOC2022
 import Data.List
 import Data.Maybe
 import Data.Sequence (Seq (..))
@@ -9,7 +10,7 @@ import MyLib
 day20 :: IO ()
 day20 = do
   -- input <- Seq.fromList . zip [0 ..] . map (read @Int) . lines <$> readFile "test20.txt"
-  input <- Seq.fromList . zip [0 ..] . map (read @Int) . lines <$> readFile "input20.txt"
+  input <- Seq.fromList . zip [0 ..] . map (read @Int) . lines <$> (getDataDir >>= readFile . (++ "/input/input20.txt")) 
   let len = length input
   -- mapM_ print $ scanl' (step len) input [0 .. len - 1]
   let f x = let Just n = Seq.findIndexL ((== 0) . snd) x in map (snd . Seq.index x . (`mod` length x) . (+ n)) [1000, 2000, 3000]

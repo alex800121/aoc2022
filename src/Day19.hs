@@ -1,5 +1,6 @@
 module Day19 (day19) where
 
+import Paths_AOC2022
 import Control.Applicative
 import Control.Monad
 import Data.Either
@@ -89,7 +90,7 @@ calcQuality x = getBlueprint x * head (getGeodes x)
 day19 :: IO ()
 day19 = do
   -- input <- fromJust . parseMaybe blueprintParser <$> readFile "test19.txt"
-  input <- fromJust . parseMaybe blueprintParser <$> readFile "input19.txt"
+  input <- fromJust . parseMaybe blueprintParser <$> (getDataDir >>= readFile . (++ "/input/input19.txt")) 
   -- print input
   putStrLn $ ("day19a: " ++) $ show $ sum $ map (\x -> calcQuality $ day19a x [Right x]) input
   putStrLn $ ("day19b: " ++) $ show $ product $ map (\x -> let y = x {getTimer = 32} in head $ getGeodes $ day19a y [Right y]) $ take 3 input

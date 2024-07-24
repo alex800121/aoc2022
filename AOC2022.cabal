@@ -1,4 +1,4 @@
-cabal-version:      3.0
+cabal-version:      3.4
 name:               AOC2022
 version:            0.1.0.0
 
@@ -22,7 +22,7 @@ maintainer:         alex800121@hotmail.com
 extra-source-files: CHANGELOG.md
 
 common shared
-    default-language: Haskell2010
+    default-language: GHC2021
     build-depends:
         base >= 4.17.0.0,
         megaparsec,
@@ -38,14 +38,15 @@ common shared
         pureMD5,
         base16-bytestring,
         freer-simple,
-        multiset
+        multiset,
+        AOC
     default-extensions: TypeFamilies, OverloadedRecordDot, TypeApplications, DataKinds
     ghc-options: -O2
 
 library
     import: shared
     exposed-modules:
-        MyLib,
+        Paths_AOC2022,
         Day1,
         Day2,
         Day3,
@@ -70,8 +71,7 @@ library
         Day22,
         Day23,
         Day24,
-        Day25,
-        Main
+        Day25
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -88,6 +88,7 @@ executable AOC2022
 
     -- Modules included in this executable, other than Main.
     other-modules:
+        Paths_AOC2022,
         Day1,
         Day2,
         Day3,
@@ -112,12 +113,9 @@ executable AOC2022
         Day22,
         Day23,
         Day24,
-        Day25,
-        MyLib
+        Day25
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:
-        AOC2022
     
     hs-source-dirs:   app, src

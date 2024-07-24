@@ -1,5 +1,6 @@
 module Day25 (day25) where
 
+import Paths_AOC2022
 import MyLib
 
 type SNAFU = String
@@ -29,5 +30,5 @@ toSNAFU x = f "" x
 day25 :: IO ()
 day25 = do
   -- input <- map fromSNAFU . lines <$> readFile "test25.txt"
-  input <- map fromSNAFU . lines <$> readFile "input25.txt"
+  input <- map fromSNAFU . lines <$>(getDataDir >>= readFile . (++ "/input/input25.txt")) 
   putStrLn $ ("day25a: " ++) $ toSNAFU $ sum input

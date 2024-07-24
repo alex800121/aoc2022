@@ -1,5 +1,6 @@
 module Day7 (day7) where
 
+import Paths_AOC2022
 import MyLib
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -64,7 +65,7 @@ printLevel n = unlines . map f . Map.toList
 
 day7 :: IO ()
 day7 = do
-  fs <- fromJust . parseMaybe readFileSystem <$> readFile "input7.txt"
+  fs <- fromJust . parseMaybe readFileSystem <$> (getDataDir >>= readFile . (++ "/input/input7.txt")) 
   let total = 70000000
       need = 30000000
       upper = total - need

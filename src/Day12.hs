@@ -1,14 +1,17 @@
 {-# LANGUAGE GADTs #-}
+
 module Day12 (day12) where
 
-import MyLib
 import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Maybe
 import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.Set qualified as Set
+import MyLib
+import Paths_AOC2022
 
 type Index = (Int, Int)
+
 type Terrain = Map Index Char
 
 adjacent :: [Index]
@@ -34,7 +37,7 @@ bfs t travelled ends starts test steps
 
 day12 :: IO ()
 day12 = do
-  input <- drawMap Just . lines <$> readFile "input12.txt"
+  input <- drawMap Just . lines <$> (getDataDir >>= readFile . (++ "/input/input12.txt"))
   -- input <- drawMap Just . lines <$> readFile "test12.txt"
   putStrLn $ ("day12a: " ++) $ show $ bfs input Set.empty (Map.keysSet $ Map.filter (== 'E') input) (Map.keysSet $ Map.filter (== 'S') input) (reachable input) 0
   putStrLn $ ("day12b: " ++) $ show $ bfs input Set.empty (Map.keysSet $ Map.filter ((||) <$> (== 'a') <*> (== 'S')) input) (Map.keysSet $ Map.filter (== 'E') input) (flip (reachable input)) 0

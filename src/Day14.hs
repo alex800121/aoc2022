@@ -1,15 +1,17 @@
 module Day14 (day14) where
 
-import MyLib
-import Data.List.Split
-import Data.Set (Set)
-import qualified Data.Set as Set
 import Data.Bifunctor
 import Data.List
+import Data.List.Split
 import Data.Maybe (fromJust)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Debug.Trace
+import MyLib
+import Paths_AOC2022
 
 type Index = (Int, Int)
+
 type Cave = Set Index
 
 origin :: Index
@@ -32,11 +34,11 @@ settleSand :: Int -> Index -> (Index, Cave) -> (Index, Cave)
 -- settleSand bottom x (_, c) = trace (show y) (y, Set.insert y c)
 settleSand bottom x (_, c) = (y, Set.insert (dropSand bottom c x) c)
   where
-    y = dropSand bottom c x 
-    
+    y = dropSand bottom c x
+
 day14 :: IO ()
 day14 = do
-  cave <- Set.unions . map (buildCave . map ((\(x : y : _) -> (read x, read y)) . splitOn ",") . splitOn " -> ") . lines <$> readFile "input14.txt"
+  cave <- Set.unions . map (buildCave . map ((\(x : y : _) -> (read x, read y)) . splitOn ",") . splitOn " -> ") . lines <$> (getDataDir >>= readFile . (++ "/input/input14.txt"))
   -- cave <- Set.unions . map (buildCave . map ((\(x : y : _) -> (read x, read y)) . splitOn ",") . splitOn " -> ") . lines <$> readFile "test14.txt"
   let bottom = maximum $ Set.map snd cave
   putStrLn $ ("day14a: " ++) $ show $ subtract 1 $ fromJust $ findIndex ((>= bottom) . snd . fst) $ iterate (settleSand bottom origin) (origin, cave)

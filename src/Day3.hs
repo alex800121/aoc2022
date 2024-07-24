@@ -1,5 +1,6 @@
 module Day3 (day3) where
 
+import Paths_AOC2022
 import MyLib
 import Data.Char
 import Data.List
@@ -12,7 +13,7 @@ prioritize x
   
 day3 :: IO ()
 day3 = do
-  input' <- lines <$> readFile "input3.txt"
+  input' <- lines <$> (getDataDir >>= readFile . (++ "/input/input3.txt")) 
   let input = map (\x -> let n = length x `div` 2 in splitAt n x) input'
       input2 = map (foldr1 intersect) $ chunksOf 3 input'
   putStrLn $ ("day3a: " ++) $ show $ sum $ map (prioritize . head . uncurry intersect) input

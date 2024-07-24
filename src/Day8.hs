@@ -1,5 +1,6 @@
 module Day8 where
 
+import Paths_AOC2022
 import MyLib
 import Data.List
 import Data.Char
@@ -27,6 +28,6 @@ input' f g h input =
   
 day8 :: IO ()
 day8 = do
-  input <- map (map digitToInt) . lines <$> readFile "input8.txt"
+  input <- map (map digitToInt) . lines <$> (getDataDir >>= readFile . (++ "/input/input8.txt")) 
   putStrLn $ ("day8a: " ++) $ show $ input' calcVisible (||) (length . filter id) input
   putStrLn $ ("day8b: " ++) $ show $ input' calcView (*) maximum input

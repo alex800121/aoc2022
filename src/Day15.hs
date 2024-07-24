@@ -1,5 +1,6 @@
 module Day15 (day15) where
 
+import Paths_AOC2022
 import MyLib
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -82,9 +83,10 @@ day15 :: IO ()
 day15 = do
   -- sensors <- map (fromJust . parseMaybe sensorParser) . lines <$> readFile "test15.txt"
   -- sensors' <- map (fromJust . parseMaybe sensorParser') . lines <$> readFile "test15.txt"
-  sensors <- map (fromJust . parseMaybe sensorParser) . lines <$> readFile "input15.txt"
-  sensors' <- map (fromJust . parseMaybe sensorParser') . lines <$> readFile "input15.txt"
-  let xs = concatMap (\(a, b) -> [fst a - manhattan' a b, fst a + manhattan' a b]) sensors'
+  input <- getDataDir >>= readFile . (++ "/input/input15.txt")
+  let sensors = map (fromJust . parseMaybe sensorParser) . lines $ input
+      sensors' = map (fromJust . parseMaybe sensorParser') . lines $ input
+      xs = concatMap (\(a, b) -> [fst a - manhattan' a b, fst a + manhattan' a b]) sensors'
       minX = minimum xs
       maxX= maximum xs
       y = 2000000
