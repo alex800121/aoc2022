@@ -67,4 +67,4 @@ day23 = do
   input <- readInput <$>(getDataDir >>= readFile . (++ "/input/input23.txt")) 
   -- input <- readInput <$> readFile "test23.txt"
   putStrLn $ ("day23a: " ++) $ show $ length $ filter (== '.') $ concat $ drawGraph (\case Nothing -> '.'; Just 1 -> '#'; Just _ -> 'X') $ Set.toMap $ foldl' step input [0 .. 9]
-  putStrLn $ ("day23a: " ++) $ show $ step' 0 input
+  putStrLn $ ("day23b: " ++) $ show $ step' 0 input
