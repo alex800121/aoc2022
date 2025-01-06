@@ -2,19 +2,19 @@
 
 module Day23 (day23) where
 
-import Paths_AOC2022
 import Data.List
-import qualified Data.Map as Map
-import Data.MultiSet (MultiSet)
-import qualified Data.MultiSet as Set
+import Data.Map qualified as Map
+import Data.Set (Set)
+import Data.Set qualified as Set
 import MyLib hiding (Direction (..))
+import Paths_AOC2022
 
 data Direction = North | South | West | East
   deriving (Eq, Show, Ord)
 
 type Index = (Int, Int)
 
-type Set = MultiSet
+-- type Set = MultiSet
 
 instance Enum Direction where
   fromEnum North = 0
@@ -28,34 +28,36 @@ instance Enum Direction where
     3 -> East
 
 readInput :: String -> Set Index
-readInput = Set.fromMap . drawMap (\case '#' -> Just 1; _ -> Nothing) . lines
+readInput = Map.keysSet . drawMap (\case '#' -> Just 1; _ -> Nothing) . lines
 
 surrounds :: Set Index
 surrounds = Set.fromList [(x, y) | x <- [-1 .. 1], y <- [-1 .. 1], (x, y) /= (0, 0)]
 
-toDir :: Direction -> (Index, Set Index)
-toDir North = ((0, -1), Set.fromList [(x, -1) | x <- [-1 .. 1]])
-toDir South = ((0, 1), Set.fromList [(x, 1) | x <- [-1 .. 1]])
-toDir West = ((-1, 0), Set.fromList [(-1, x) | x <- [-1 .. 1]])
-toDir East = ((1, 0), Set.fromList [(1, x) | x <- [-1 .. 1]])
+toDir :: Direction -> [Index]
+toDir = \case
+  North -> ([(x, -1) | x <- ls])
+  South -> ([(x, 1) | x <- ls])
+  West -> ([(-1, x) | x <- ls])
+  East -> ([(1, x) | x <- ls])
+  where
+    ls = [0, -1, 1]
 
 proposeMove :: Set Index -> Direction -> Index -> Index
 proposeMove s d i
   | Set.null (Set.intersection s (Set.map (+& i) surrounds)) = i
-  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 0)))) = i +& fst (d' !! 0)
-  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 1)))) = i +& fst (d' !! 1)
-  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 2)))) = i +& fst (d' !! 2)
-  | Set.null (Set.intersection s (Set.map (+& i) (snd (d' !! 3)))) = i +& fst (d' !! 3)
+  | Just x <- find (not . any (`Set.member` s)) d' = head x
   | otherwise = i
   where
-    d' = map toDir $ iterate succ d
+    d' = map (map (i +&) . toDir) $ take 4 $ iterate succ d
 
 step :: Set Index -> Int -> Set Index
 step s n = restrictedMove
   where
     d = toEnum n
-    draft = Set.map (proposeMove s d) s
-    restrictedMove = Set.map (\x -> let x' = proposeMove s d x in if x' `Set.occur` draft > 1 then x else x') s
+    draft = Set.foldl' (\m k -> Map.insertWith (<>) (proposeMove s d k) [k] m) Map.empty s
+    restrictedMove = Map.foldlWithKey' f Set.empty draft
+    f acc next [o] = Set.insert next acc
+    f acc next os = acc <> Set.fromList os
 
 step' :: Int -> Set Index -> Int
 step' n s = if s' == s then n + 1 else step' (n + 1) s'
@@ -64,7 +66,8 @@ step' n s = if s' == s then n + 1 else step' (n + 1) s'
 
 day23 :: IO ()
 day23 = do
-  input <- readInput <$>(getDataDir >>= readFile . (++ "/input/input23.txt")) 
-  -- input <- readInput <$> readFile "test23.txt"
-  putStrLn $ ("day23a: " ++) $ show $ length $ filter (== '.') $ concat $ drawGraph (\case Nothing -> '.'; Just 1 -> '#'; Just _ -> 'X') $ Set.toMap $ foldl' step input [0 .. 9]
+  input <- readInput <$> (getDataDir >>= readFile . (++ "/input/input23.txt"))
+  -- input <- readInput <$> (getDataDir >>= readFile . (++ "/input/test23.txt"))
+  putStrLn $ ("day23a: " ++) $ show $ length $ filter (== '.') $ concat $ drawGraph (\case Nothing -> '.'; Just _ -> '#') $ Map.fromSet (const ()) $ foldl' step input [0 .. 9]
   putStrLn $ ("day23b: " ++) $ show $ step' 0 input
+
