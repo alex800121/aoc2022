@@ -1,20 +1,8 @@
 module Day19 (day19) where
 
-import Control.Applicative
-import Control.Monad
-import Control.Monad.ST
 import Control.Parallel.Strategies
-import Data.Bifunctor (Bifunctor (..))
-import Data.Either
-import Data.Function (on)
 import Data.List
-import Data.List.Split
 import Data.Maybe
-import Data.Set (Set)
-import Data.Set qualified as Set
-import Data.Vector qualified as V
-import Data.Vector.Mutable qualified as M
-import Debug.Trace
 import MyLib
 import Paths_AOC2022
 import Text.Megaparsec
@@ -22,37 +10,49 @@ import Text.Megaparsec.Char
 
 type Robots = [Int]
 
-type Blueprint = ([(Robots, Geodes)], Robots)
+type Blueprint = (Resources, [(Robots, Resources)], Robots)
 
-type Geodes = [Int]
+type Resources = [Int]
 
-dfs :: Blueprint -> Int -> (Int, Robots, Geodes) -> Int
-dfs (bp, maxRobots) = go
+data GameState = G {_timer :: Int, _robots :: Robots, _resources :: Resources, _geodes :: Int}
+  deriving (Show, Eq, Ord)
+
+dfs :: Blueprint -> GameState -> Int
+dfs (geodeCost, bp, maxRobots) = go 0
   where
-    go best (0, _, resources) = max best (head resources)
-    go best (timer, robots, resources)
+    go best (G 0 _ resources geodes) = max best geodes
+    go best (G timer robots resources geodes)
       | ideal <= best = best
-      | otherwise = foldl' go best next
+      | otherwise = foldl' go best (nextGeodes ++ next)
       where
-        ideal = head resources + head robots * timer + sum [1 .. timer - 1]
+        ideal = geodes + ((timer - 1) * timer) `div` 2
+        nextGeodes =
+          [ G timer' robots re geodes'
+            | tick <- f 0 resources geodeCost robots,
+              let re = zipWith3 (\x y z -> x + y * tick - z) resources robots geodeCost,
+              let timer' = timer - tick,
+              let geodes' = geodes + timer'
+          ]
+        timerGeodes = map _timer nextGeodes
         next =
-          [ (timer', ro, re)
+          [ G timer' ro re geodes
             | (added, costs) <- bp,
-              let needed = zipWith subtract resources costs,
               let ro = zipWith (+) added robots,
               and (zipWith (<=) ro maxRobots),
-              tick <- f 0 needed robots,
+              tick <- f 0 resources costs robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots costs,
-              let timer' = timer - tick
+              let timer' = timer - tick,
+              all (< timer') timerGeodes
           ]
-        f tick [] _ = [tick + 1]
-        f tick (x : xs) (y : ys)
-          | x <= 0 = f tick xs ys
+        f tick [] _ _ = [tick + 1]
+        f tick (x : xs) (c : cs) (y : ys)
+          | cost <= 0 = f tick xs cs ys
           | y <= 0 = []
           | t + 1 >= timer = [timer]
-          | otherwise = f (max tick t) xs ys
+          | otherwise = f (max tick t) xs cs ys
           where
-            t = negate ((-x) `div` y)
+            cost = c - x
+            t = negate ((-cost) `div` y)
 
 blueprintParser :: Parser [(Int, Blueprint)]
 blueprintParser =
@@ -71,10 +71,11 @@ blueprintParser =
       string "Each geode robot costs" <* space
       go <- signedInteger <* space <* string "ore and" <* space
       gb <- signedInteger <* space <* string "obsidian." <* space
-      let robotCosts = [[0, gb, 0, go], [0, 0, bc, bo], [0, 0, 0, co], [0, 0, 0, oo]]
-          maxRobots = maxBound : tail (foldl' (zipWith max) [0, 0, 0, 0] robotCosts)
+      let robotCosts = [[0, bc, bo], [0, 0, co], [0, 0, oo]]
+          geodeCost = [gb, 0, go]
+          maxRobots = maxBound : tail (foldl' (zipWith max) [0, 0, 0] robotCosts)
       ( ( n,
-          (zip [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] robotCosts, maxRobots)
+          (geodeCost, zip [[1, 0, 0], [0, 1, 0], [0, 0, 1]] robotCosts, maxRobots)
         )
           :
         )
@@ -86,10 +87,10 @@ day19 = do
     . ("day19a: " ++)
     . show
     . sum
-    $ map (\(i, bp) -> i * dfs bp 0 (24, [0, 0, 0, 1], [0, 0, 0, 0])) input
+    $ parMap rpar (\(i, bp) -> i * dfs bp (G 24 [0, 0, 1] [0, 0, 0] 0)) input
   putStrLn
     . ("day19b: " ++)
     . show
     . product
-    . map (\(_, bp) -> dfs bp 0 (32, [0, 0, 0, 1], [0, 0, 0, 0]))
+    . parMap rpar (\(_, bp) -> dfs bp (G 32 [0, 0, 1] [0, 0, 0] 0))
     $ take 3 input
