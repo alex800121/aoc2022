@@ -1,12 +1,12 @@
 module Day19 (day19) where
 
-import Control.Parallel.Strategies
-import Data.List
-import Data.Maybe
-import MyLib
-import Paths_AOC2022
-import Text.Megaparsec
-import Text.Megaparsec.Char
+import Control.Parallel.Strategies (parMap, rpar)
+import Data.List (foldl')
+import Data.Maybe (fromJust)
+import MyLib (Parser, signedInteger)
+import Paths_AOC2022 (getDataDir)
+import Text.Megaparsec (MonadParsec (eof), parseMaybe, (<|>))
+import Text.Megaparsec.Char (char, space, string)
 
 type Robots = [Int]
 
@@ -17,32 +17,37 @@ type Resources = [Int]
 data GameState = G {_timer :: Int, _robots :: Robots, _resources :: Resources, _geodes :: Int}
   deriving (Show, Eq, Ord)
 
+calcHue (G t _ _ g) = g + ((t - 1) * t) `div` 2
+
 dfs :: Blueprint -> GameState -> Int
 dfs (geodeCost, bp, maxRobots) = go 0
   where
     go best (G 0 _ resources geodes) = max best geodes
-    go best (G timer robots resources geodes)
-      | ideal <= best = best
+    go best g@(G timer robots resources geodes)
+      | calcHue g <= best = best
       | otherwise = foldl' go best (nextGeodes ++ next)
       where
-        ideal = geodes + ((timer - 1) * timer) `div` 2
         nextGeodes =
-          [ G timer' robots re geodes'
+          [ g
             | tick <- f 0 resources geodeCost robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots geodeCost,
               let timer' = timer - tick,
-              let geodes' = geodes + timer'
+              let geodes' = geodes + timer',
+              let g = G timer' robots re geodes',
+              calcHue g >= best
           ]
         timerGeodes = map _timer nextGeodes
         next =
-          [ G timer' ro re geodes
+          [ g
             | (added, costs) <- bp,
               let ro = zipWith (+) added robots,
               and (zipWith (<=) ro maxRobots),
               tick <- f 0 resources costs robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots costs,
               let timer' = timer - tick,
-              all (< timer') timerGeodes
+              all (< timer') timerGeodes,
+              let g = G timer' ro re geodes,
+              calcHue g >= best
           ]
         f tick [] _ _ = [tick + 1]
         f tick (x : xs) (c : cs) (y : ys)

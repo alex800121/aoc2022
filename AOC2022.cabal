@@ -42,6 +42,7 @@ common shared
         multiset,
         linear,
         parallel,
+        pqueue,
         AOC
     default-extensions: TypeFamilies, OverloadedRecordDot, TypeApplications, DataKinds
     ghc-options: -O2
