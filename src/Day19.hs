@@ -34,7 +34,7 @@ dfs (geodeCost, bp, maxRobots) = go 0
               let geodes' = geodes + timer',
               calcHue timer' geodes' >= best
           ]
-        timerGeodes = map _timer nextGeodes
+        -- timerGeodes = map _timer nextGeodes
         next =
           [ G timer' ro re geodes
             | (added, costs) <- bp,
@@ -43,8 +43,8 @@ dfs (geodeCost, bp, maxRobots) = go 0
               tick <- f 0 resources costs robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots costs,
               let timer' = timer - tick,
-              calcHue timer' geodes >= best,
-              all (< timer') timerGeodes
+              -- all (< timer') timerGeodes,
+              calcHue timer' geodes >= best
           ]
         f tick [] _ _ = [tick + 1]
         f tick (x : xs) (c : cs) (y : ys)
