@@ -17,37 +17,34 @@ type Resources = [Int]
 data GameState = G {_timer :: Int, _robots :: Robots, _resources :: Resources, _geodes :: Int}
   deriving (Show, Eq, Ord)
 
-calcHue (G t _ _ g) = g + ((t - 1) * t) `div` 2
-
 dfs :: Blueprint -> GameState -> Int
 dfs (geodeCost, bp, maxRobots) = go 0
   where
+    calcHue timer g = g + ((timer - 1) * timer) `div` 2
     go best (G 0 _ resources geodes) = max best geodes
     go best g@(G timer robots resources geodes)
-      | calcHue g <= best = best
+      | calcHue timer geodes <= best = best
       | otherwise = foldl' go best (nextGeodes ++ next)
       where
         nextGeodes =
-          [ g
+          [ G timer' robots re geodes'
             | tick <- f 0 resources geodeCost robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots geodeCost,
               let timer' = timer - tick,
               let geodes' = geodes + timer',
-              let g = G timer' robots re geodes',
-              calcHue g >= best
+              calcHue timer' geodes' >= best
           ]
         timerGeodes = map _timer nextGeodes
         next =
-          [ g
+          [ G timer' ro re geodes
             | (added, costs) <- bp,
               let ro = zipWith (+) added robots,
               and (zipWith (<=) ro maxRobots),
               tick <- f 0 resources costs robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots costs,
               let timer' = timer - tick,
-              all (< timer') timerGeodes,
-              let g = G timer' ro re geodes,
-              calcHue g >= best
+              calcHue timer' geodes >= best,
+              all (< timer') timerGeodes
           ]
         f tick [] _ _ = [tick + 1]
         f tick (x : xs) (c : cs) (y : ys)

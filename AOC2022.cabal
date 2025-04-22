@@ -43,6 +43,7 @@ common shared
         linear,
         parallel,
         pqueue,
+        hashable,
         AOC
     default-extensions: TypeFamilies, OverloadedRecordDot, TypeApplications, DataKinds
     ghc-options: -O2
