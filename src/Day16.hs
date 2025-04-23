@@ -2,17 +2,19 @@
 
 module Day16 (day16) where
 
+import Data.Array.Unboxed qualified as A
 import Data.Bifunctor
-import Data.Either
-import Data.List
+import Data.Bits
+import Data.Function (on)
+import Data.IntMap (IntMap)
+import Data.IntMap qualified as IM
+import Data.List (foldl', sortBy)
 import Data.List.Split
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe
-import Data.Semigroup (Arg (..))
-import Data.Set (Set)
-import Data.Set qualified as Set
-import Debug.Trace
+import Data.Vector.Unboxed qualified as V
+import Data.Word
 import MyLib
 import Paths_AOC2022
 import Text.Megaparsec
@@ -20,24 +22,77 @@ import Text.Megaparsec.Char
 
 type Valve = String
 
-type ValveFlow = Map Valve Int
+type RawFlow = Map Valve Int
 
-type ValveMap = Map Valve (Map Valve Int)
+type RawMap = Map Valve (Map Valve Int)
 
-data GameState = G {accPressure :: Int, timer :: Int, atValve :: Valve, openPressure :: Int, openedValves :: Set Valve, closedValves :: ValveFlow}
-  deriving (Show, Eq, Ord)
+type ValveFlow = V.Vector Int
 
-choices :: ValveMap -> GameState -> Set GameState
-choices valveMap g@(G accPressure time atValve openPressure openedValves closedValves)
-  | Set.null nextValves = Set.singleton $ G (accPressure + time * openPressure) 0 atValve openPressure openedValves closedValves
-  | otherwise = Set.unions $ Set.map (choices valveMap) nextValves
+type ValveMap = A.Array (Int, Int) Int
+
+-- >>> product (replicate (64 - 25 + 1) 2)
+-- 1099511627776
+
+-- 0..15 open valves (bits)
+-- 16..19 current valves (<= 16)
+-- 20..24 timer (<= 30)
+-- 25.. total pressure (<= 6480)
+type Compress = Int
+
+type GameState = (Int, Int, Int)
+
+solveB :: [(Int, Int)] -> Int
+solveB xs = go 0 xs'
   where
-    nextValves = Set.filter ((>= 0) . timer) $ Set.map (\(Arg k a) -> f k a) $ Map.argSet closedValves
-    f v a = G (accPressure + t * openPressure) (time - t) v (openPressure + a) (Set.insert v openedValves) (Map.delete v closedValves)
+    xs' = sortBy (flip compare `on` snd) (map (first (`mod` bit 16)) xs)
+    go n (x : y : xs)
+      | snd y + snd x <= n = n
+      | otherwise = go' n x (y : xs)
       where
-        t = (valveMap Map.! atValve) Map.! v
+        go' n _ [] = go n (y : xs)
+        go' n a (b : bs)
+          | s <= n = go n (y : xs)
+          | fst a .&. fst b == 0 = go s (y : xs)
+          | otherwise = go' n a bs
+          where
+            s = snd a + snd b
+    go n _ = n
 
-valveParser :: Parser (ValveFlow, ValveMap)
+dfs :: Bool -> ValveFlow -> ValveMap -> GameState -> (Int, IntMap Int)
+dfs b vf vm = go (0, IM.empty) . (,0)
+  where
+    ideal timer start visited n =
+      n
+        + sum
+          [ timer' * (vf V.! x)
+            | x <- [0 .. 15],
+              not (testBit visited x),
+              let t = vm A.! (start, x),
+              t < timer,
+              let timer' = timer - vm A.! (start, x)
+          ]
+    go (best, cache) (g@(timer, start, visited), n)
+      | Just n0 <- cache IM.!? g',
+        n0 >= n =
+          (best, cache)
+      | otherwise = foldl' go (best', cache') next
+      where
+        best' = max best n
+        g' = compress g
+        cache' = IM.insert g' n cache
+        next =
+          [ ((timer', start', visited'), n')
+            | start' <- [0 .. 15],
+              not (testBit visited start'),
+              let t = vm A.! (start, start'),
+              t < timer,
+              let timer' = timer - t,
+              let visited' = setBit visited start',
+              let n' = n + timer' * vf V.! start',
+              b || ideal timer' start' visited' n' >= best'
+          ]
+
+valveParser :: Parser (RawFlow, RawMap)
 valveParser =
   (eof >> pure (Map.empty, Map.empty)) <|> do
     name <- string "Valve " >> some (anySingleBut ' ') <* space
@@ -50,25 +105,49 @@ valveParser =
     valves <- splitOn ", " <$> some (anySingleBut '\n') <* space
     bimap (Map.insert name n) (Map.insert name (Map.fromList $ map (,1) valves)) <$> valveParser
 
-buildMap :: ValveMap -> ValveMap -> ValveMap
+buildMap :: RawMap -> RawMap -> (Map String Int, A.Array (Int, Int) Int)
 buildMap ref acc
-  -- \| trace (show acc) False = undefined
-  | acc == acc' = Map.map (Map.map (+ 1) . Map.filterWithKey (\k _ -> k == "AA" || k `Map.member` acc)) acc
+  | acc == acc' = (vti, im)
   | otherwise = buildMap ref acc'
   where
     acc' = Map.mapWithKey f acc
+    vm = Map.toList $ Map.map (Map.toList . Map.map (+ 1) . Map.filterWithKey (\k _ -> k == "AA" || k `Map.member` acc)) acc
+    vti = Map.fromList (zip (map fst vm) [0 ..])
+    im =
+      A.accumArray
+        (const id)
+        0
+        ((0, 0), (length vti - 1, length vti - 1))
+        [ ((vti Map.! x, vti Map.! y), a)
+          | (x, ys) <- vm,
+            (y, a) <- ys
+        ]
     f k m = Map.delete k . Map.unionWith min m . Map.unionsWith min . Map.mapWithKey g $ m
     g k a = Map.map (+ a) $ ref Map.! k
 
-pickTwo :: GameState -> [GameState] -> Int
-pickTwo g gs = maybe 0 ((accPressure g +) . accPressure) (find (Set.disjoint (openedValves g) . openedValves) gs)
+compress :: GameState -> Compress
+compress (timer, start, visited) = timer `shift` 20 + start `shift` 16 + setBit visited start
+
+decompress :: Compress -> GameState
+decompress n = (timer, curValve, visited)
+  where
+    timer = n `shiftR` 20
+    curValve = (n - timer `shift` 20) `shiftR` 16
+    visited = n `mod` bit 16
 
 day16 :: IO ()
 day16 = do
-  (valveFlow, valveMap) <- (\(x, y) -> (Map.filterWithKey (\k a -> a /= 0) x, buildMap y (Map.filterWithKey (\k _ -> k == "AA" || (x Map.! k /= 0)) y))) . fromJust . parseMaybe valveParser <$> (getDataDir >>= readFile . (++ "/input/input16.txt"))
-  let initGameState = G 0 30 "AA" 0 Set.empty valveFlow
-      initGameState' = G 0 26 "AA" 0 Set.empty valveFlow
-      day16a = choices valveMap initGameState
-      day16b = map (uncurry pickTwo) $ mapMaybe uncons $ tails $ reverse $ Set.toList $ choices valveMap initGameState'
-  putStrLn $ ("day16a: " ++) $ show $ accPressure $ maximum day16a
-  putStrLn $ ("day16b: " ++) $ show $ maximum day16b
+  (vf, (vti, valveMap)) <- (\(x, y) -> (Map.toList $ Map.filterWithKey (\k a -> a /= 0) x, buildMap y (Map.filterWithKey (\k _ -> k == "AA" || (x Map.! k /= 0)) y))) . fromJust . parseMaybe valveParser <$> (getDataDir >>= readFile . (++ "/input/input16.txt"))
+  let valveFlow = V.replicate (length vti) 0 V.// map (first (vti Map.!)) vf
+  putStrLn
+    . ("day16a: " ++)
+    . show
+    . fst
+    $ dfs False valveFlow valveMap (30, 0, 0)
+  putStrLn
+    . ("day16b: " ++)
+    . show
+    . solveB
+    . IM.toList
+    . snd
+    $ dfs True valveFlow valveMap (26, 0, 0)
