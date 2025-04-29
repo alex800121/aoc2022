@@ -2,9 +2,11 @@
 
 module Day17 (day17) where
 
+import Data.Bifunctor (Bifunctor (..))
 import Data.List
 import Data.Maybe
 import Data.Vector (Vector)
+import Data.Vector qualified as U
 import Data.Vector qualified as V
 import Data.Word
 import Debug.Trace
@@ -14,15 +16,15 @@ import Paths_AOC2022
 
 type Shape = [Word8]
 
-data Board = Board {board :: [Word8], windPos :: Int, windLen :: Int, wind :: Wind}
+data Board = Board {board :: [Word8], windPos :: Int, shapePos :: Int, height :: Int}
 
-type Wind = Vector (Shape -> Shape)
+type WindL = Bool
 
 instance Show Board where
-  show (Board b wp _ _) = drawShape b ++ '\n' : show wp
+  show (Board b wp sp h) = drawShape b ++ "\nheight = " ++ show h ++ '\n' : show wp ++ '\n' : show sp
 
-shapes :: [Shape]
-shapes = [[120], [16, 56, 16], [32, 32, 56], [8, 8, 8, 8], [24, 24]]
+shapes :: Vector Shape
+shapes = V.fromList [[120], [16, 56, 16], [32, 32, 56], [8, 8, 8, 8], [24, 24]]
 
 drawShape :: Shape -> String
 drawShape = unlines . map (\y -> map ((\x -> if x then '#' else '.') . testBit y) [1 .. 7])
@@ -36,38 +38,53 @@ moveLeft = map (`rotateR` 1)
 moveRight :: Shape -> Shape
 moveRight = map (`rotateL` 1)
 
-nextShape :: Board -> Shape -> Board
-nextShape (Board b wp wl w) s = f (replicate (3 + length s) 0 ++ b) wp wl w s
+move True = moveLeft
+move False = moveRight
+
+nextShape :: U.Vector WindL -> Vector Shape -> Board -> Board
+nextShape wv sv (Board b wp sp h) = f b' s wp h'
   where
-    f b' wp' wl' w' s'
-      -- \| trace (drawShape (zipWith (.|.) (s' ++ repeat 0) b')) False = undefined
-      | inBound s'' && all (== 0) (zipWith (.&.) s'' b') = g b' ((wp' + 1) `mod` wl') wl' w' s''
-      | otherwise = g b' ((wp' + 1) `mod` wl') wl' w' s'
+    lenw = V.length wv
+    lens = V.length sv
+    s = sv V.! sp
+    h' = 3 + length s
+    b' = replicate h' 0 <> b
+    f b s wp h''
+      | all even s' && all (== 0) (zipWith (.&.) s' b) = g b s' ((wp + 1) `mod` lenw) h''
+      -- | not (any (`testBit` 0) s') && all (== 0) (zipWith (.&.) s' b) = g b s' ((wp + 1) `mod` lenw) h''
+      | otherwise = g b s ((wp + 1) `mod` lenw) h''
       where
-        s'' = w' V.! wp' $ s'
-    g b' wp' wl' w' s'
-      -- \| trace (drawShape (zipWith (.|.) (s' ++ repeat 0) b')) False = undefined
-      | length s'' <= length b' && all (== 0) (zipWith (.&.) s'' b') = f b' wp' wl' w' s''
-      | otherwise = Board (dropWhile (== 0) $ zipWith (.|.) (s' ++ repeat 0) b') wp' wl' w'
+        s' = move (wv U.! wp) s
+    g b s wp h''
+      | length s' <= length b && all (== 0) (zipWith (.&.) s' b) = f b' s'' wp (max 0 (pred h''))
+      | otherwise = Board (take 100 $ zipWith (.|.) (s ++ repeat 0) b) wp (succ sp `mod` lens) (h + h'')
       where
-        s'' = 0 : s'
+        s' = 0 : s
+        (b', s'') = if h'' > 0 then (tail b, s) else (b, s')
+
+findCycle l = go l l 0 1 2
+  where
+    go (x : xs) (_ : y : ys) tu ra li
+      | x == y = Just (ra - tu, tu, x)
+      | tu + ra >= li = go (y : ys) (y : ys) ra (ra + 1) (li * 2)
+      | otherwise = go (x : xs) (y : ys) tu (ra + 1) li
+    go _ _ _ _ _ = Nothing
 
 day17 :: IO ()
 day17 = do
-  w <- V.fromList . mapMaybe (\case '>' -> Just moveRight; '<' -> Just moveLeft; _ -> Nothing) <$> (getDataDir >>= readFile . (++ "/input/input17.txt"))
-  -- let w = V.fromList . map (\case ; '>' -> moveRight ; '<' -> moveLeft) $ ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>"
-  let boardList = scanl nextShape (Board [] 0 (length w) w) $ cycle shapes
-      Just (_, x) = firstRepeat $ map (take 50 . board) boardList
-      [a, b] = take 2 $ findIndices ((== x) . take 50 . board) boardList
-      diff = b - a
+  wind <- U.fromList . mapMaybe (\case '>' -> Just False; '<' -> Just True; _ -> Nothing) <$> (getDataDir >>= readFile . (++ "/input/input17.txt"))
+  let boardList = iterate (nextShape wind shapes) (Board [] 0 0 0)
+      Just (diff, fi, _) = findCycle $ map ((,) <$> shapePos <*> windPos) boardList
       n = 1000000000000
-      m = n - a
-      o = m `div` diff
-      p = m `mod` diff
-      heightA = length $ board $ boardList !! a
-      heightB = length $ board $ boardList !! b
-      heightC = length $ board $ boardList !! (b + p)
+      m = n - fi
+      (o, p) = m `divMod` diff
+      heightA = height $ boardList !! fi
+      heightB = height $ boardList !! (fi + diff)
+      heightC = height $ boardList !! (fi + diff + p)
       heightDiff = heightB - heightA
       heightDiff' = heightC - heightB
-  putStrLn $ ("day17a: " ++) $ show $ length $ board $ boardList !! 2022
+  -- print $ boardList !! 10
+  -- print (diff, fi)
+  -- print $ findCycle $ map (take 30 . board) boardList
+  putStrLn $ ("day17a: " ++) $ show $ height $ boardList !! 2022
   putStrLn $ ("day17b: " ++) $ show $ heightA + o * heightDiff + heightDiff'
