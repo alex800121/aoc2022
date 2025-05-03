@@ -17,35 +17,47 @@ type Resources = [Int]
 data GameState = G {_timer :: Int, _robots :: Robots, _resources :: Resources, _geodes :: Int}
   deriving (Show, Eq, Ord)
 
+calcHue (gc : _) (G t (ro : _) (re : _) g) = go [t, t - 1 .. 2] g ro re
+  where
+    go [] g _ _ = g
+    go (t : ts) g ro re
+      | gc <= re = go ts (g + t - 1) ro re
+      | otherwise = go ts g (ro + 1) (ro + re)
+
+-- calcHue gc (G timer robots resources geodes) = geodes + ((timer - 1) * timer) `div` 2
+
 dfs :: Blueprint -> GameState -> Int
 dfs (geodeCost, bp, maxRobots) = go 0
   where
-    calcHue timer g = g + ((timer - 1) * timer) `div` 2
     go best (G 0 _ resources geodes) = max best geodes
     go best g@(G timer robots resources geodes)
-      | calcHue timer geodes <= best = best
-      | otherwise = foldl' go best (nextGeodes ++ next)
+      | calcHue geodeCost g <= best = best
+      -- | null next = max best geodes
+      | otherwise = foldl' go best next
       where
         nextGeodes =
-          [ G timer' robots re geodes'
+          [ g
             | tick <- f 0 resources geodeCost robots,
               let re = zipWith3 (\x y z -> x + y * tick - z) resources robots geodeCost,
               let timer' = timer - tick,
               let geodes' = geodes + timer',
-              calcHue timer' geodes' >= best
+              let g = G timer' robots re geodes',
+              calcHue geodeCost g >= best
           ]
-        -- timerGeodes = map _timer nextGeodes
+        timerGeodes = map _timer nextGeodes
         next =
-          [ G timer' ro re geodes
-            | (added, costs) <- bp,
-              let ro = zipWith (+) added robots,
-              and (zipWith (<=) ro maxRobots),
-              tick <- f 0 resources costs robots,
-              let re = zipWith3 (\x y z -> x + y * tick - z) resources robots costs,
-              let timer' = timer - tick,
-              -- all (< timer') timerGeodes,
-              calcHue timer' geodes >= best
-          ]
+          nextGeodes
+            ++ [ g
+                 | (added, costs) <- bp,
+                   let ro = zipWith (+) added robots,
+                   and (zipWith (<=) ro maxRobots),
+                   tick <- f 0 resources costs robots,
+                   let re = zipWith3 (\x y z -> x + y * tick - z) resources robots costs,
+                   let timer' = timer - tick,
+                   let g = G timer' ro re geodes,
+                   all (< timer') timerGeodes,
+                   calcHue geodeCost g >= best
+               ]
         f tick [] _ _ = [tick + 1]
         f tick (x : xs) (c : cs) (y : ys)
           | cost <= 0 = f tick xs cs ys
