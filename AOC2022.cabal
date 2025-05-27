@@ -44,6 +44,7 @@ common shared
         parallel,
         pqueue,
         hashable,
+        wide-word,
         AOC
     default-extensions: TypeFamilies, OverloadedRecordDot, TypeApplications, DataKinds
     ghc-options: -O2
