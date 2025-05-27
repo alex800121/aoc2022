@@ -1,22 +1,16 @@
 module Day20 (day20) where
 
 import Control.Monad (foldM)
-import Control.Monad.ST.Strict
-import Data.Array (Array)
-import Data.Array.IArray qualified as A
-import Data.Array.MArray qualified as MA
-import Data.Array.ST (STArray)
+import Control.Monad.ST.Strict (runST, ST)
 import Data.Foldable (toList)
 import Data.List.Split (chunksOf)
 import Data.Sequence (Seq (..))
 import Data.Sequence qualified as S
-import Data.Vector.Strict qualified as SV
 import Data.Vector.Strict.Mutable qualified as SMV
 import Data.Vector.Unboxed (Vector)
 import Data.Vector.Unboxed qualified as V
 import Data.Vector.Unboxed.Mutable (STVector)
 import Data.Vector.Unboxed.Mutable qualified as MV
-import Debug.Trace (traceM)
 import Paths_AOC2022 (getDataDir)
 
 key = 811589153
@@ -100,6 +94,12 @@ day20 :: IO ()
 day20 = do
   rawInput <- V.fromList . map (read @Int) . lines <$> (getDataDir >>= readFile . (++ "/input/input20.txt"))
   -- rawInput <- V.fromList . map (read @Int) . lines <$> (getDataDir >>= readFile . (++ "/input/test20.txt"))
-  print $ run 1 1 rawInput
-  print $ run 10 key rawInput
+  putStrLn
+    . ("day20a: " ++)
+    . show
+    $ run 1 1 rawInput
+  putStrLn
+    . ("day20b: " ++)
+    . show
+    $ run 10 key rawInput
 
