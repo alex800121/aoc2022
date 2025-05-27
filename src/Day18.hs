@@ -1,46 +1,82 @@
 module Day18 (day18) where
 
-import Paths_AOC2022
-import MyLib
+import Control.Monad (foldM)
+import Control.Monad.ST.Lazy qualified as Lazy
+import Control.Monad.Zip (MonadZip (..))
+import Control.Parallel.Strategies
 import Data.List.Split
-import Data.Function
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Foldable
-import Data.Bifunctor
+import Data.Vector.Unboxed qualified as V
+import Data.Vector.Unboxed.Mutable qualified as M
+import Linear.V3
+import Paths_AOC2022
 
-type V3 n = Vec (S (S (S Z))) n
-type Index = V3 Int
+type Index = Int
 
-isAdjacent :: Enum a => Vec n a -> Vec n a -> Bool
-isAdjacent x y = manhattan (vZipWith (subtract `on` fromEnum) x y) == 1
+type Cubes = V.Vector Bool
 
-inBound :: Ord a => (Vec n a, Vec n a) -> Vec n a -> Bool
-inBound (minV, maxV) x = and (vZipWith (<=) minV x) && and (vZipWith (>=) maxV x)
+type STCubes s = M.STVector s Bool
 
-adjacents :: Set Index
-adjacents = Set.fromList $ map (toVec (SS (SS (SS SZ)))) [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, -1], [0, 0, 1]] 
+factor = 23
 
-flood :: (Index -> Bool) -> Set Index -> Set Index -> Set Index
-flood f acc starts
-  | Set.null starts = acc
-  | otherwise = flood f acc' starts'
+toV3 i = V3 (i `div` (factor * factor)) ((i `div` factor) `mod` factor) (i `mod` factor)
+
+fromV3 (V3 a b c) = (a * factor * factor) + (b * factor) + c
+
+inBound :: (Int, Int) -> Int -> Bool
+inBound (minI, maxI) i = and (mzipWith (<=) minV x) && and (mzipWith (>=) maxV x)
   where
-    acc' = Set.union starts acc
-    starts' = (Set.\\ acc) $ Set.filter f $ Set.unions $ Set.map (\x -> Set.map (vZipWith (+) x) adjacents) starts
-    
+    [minV, maxV, x] = map toV3 [minI, maxI, i]
+
+adjacents = map fromV3 [V3 1 0 0, V3 (-1) 0 0, V3 0 1 0, V3 0 (-1) 0, V3 0 0 (-1), V3 0 0 1]
+
 calcSurface :: Index -> Index -> Int
-calcSurface (Cons a (Cons b (Cons c Nil))) (Cons d (Cons e (Cons f Nil))) = 2 * sum [x * y, y * z, z * x]
+calcSurface i0 i1 = 2 * sum [x * y, y * z, z * x]
   where
+    (V3 a b c) = toV3 i0
+    (V3 d e f) = toV3 i1
     x = d - a + 1
     y = e - b + 1
     z = f - c + 1
 
+flood :: ((Int, Int), Cubes) -> Cubes
+flood (b@(start, _), cubes) = V.create $ do
+  acc <- M.replicate (V.length cubes) False
+  M.write acc start True
+  let go [] = pure acc
+      go xs = foldM f [] next >>= go
+        where
+          next = concatMap (\x -> map (+ x) adjacents) xs
+      f accxs i | inBound b i && not (cubes V.! i) = do
+        check <- M.read acc i
+        if check then pure accxs else M.write acc i True >> pure (i : accxs)
+      f accxs i = pure accxs
+  go [start]
+
+day18a v = V.sum $ V.imap (\i x -> if x then length [() | y <- adjacents, Just True /= (v V.!? (i + y))] else 0) v
+
+readInput :: [V3 Int] -> ((Int, Int), Cubes)
+readInput xs = Lazy.runST $ Lazy.fixST go
+  where
+    go :: ((Int, Int), Cubes) -> Lazy.ST s ((Int, Int), Cubes)
+    go output = do
+      v <- M.replicate (snd (fst output) + 1) False
+      let g (lb, hb) [] = pure (fromV3 (lb - 1), fromV3 (hb + 1))
+          g (lb, hb) (x : xs) = M.write v x' True >> g (mzipWith min lb x, mzipWith max hb x) xs
+            where
+              x' = fromV3 x
+      (,) <$> g (pure maxBound, pure minBound) xs <*> V.freeze v
+
 day18 :: IO ()
 day18 = do
-  input <- map (toVec (SS (SS (SS SZ))) . map (read @Int) . splitOn ",") . lines <$> (getDataDir >>= readFile . (++ "/input/input18.txt")) 
-  -- input <- map (toVec (SS (SS (SS SZ))) . map (read @Int) . splitOn ",") . lines <$> readFile "test18.txt"
-  let day18a n = (6 * length n) - sum [1 | x <- n, y <- n, isAdjacent x y]
-      minMax = bimap (subtract 1) (+ 1) $ foldl' (\(x, y) z -> (vZipWith min x z, vZipWith max y z)) (pure maxBound, pure minBound) input
-  putStrLn $ ("day18a: " ++) $ show $ day18a input
-  putStrLn $ ("day18b: " ++) $ show $ subtract (uncurry calcSurface minMax) $ day18a $ Set.toList $ flood (\x -> inBound minMax x && x `Set.notMember` Set.fromList input) Set.empty (Set.singleton (fst minMax))
+  input0 <- map ((\[x, y, z] -> V3 x y z) . map (succ . read @Int) . splitOn ",") . lines <$> (getDataDir >>= readFile . (++ "/input/input18.txt"))
+  let (minMax, input) = readInput input0
+  putStrLn
+    . ("day18a: " ++)
+    . show
+    $ day18a input
+  putStrLn
+    . ("day18b: " ++)
+    . show
+    . subtract (uncurry calcSurface minMax)
+    . day18a
+    $ flood (minMax, input)
